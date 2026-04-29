@@ -133,15 +133,21 @@ def main():
         seed=args.seed,
     )
 
-    agent = PPOAgent(OBS_SIZE, ACTION_SIZE, args.hidden_size, args.lr, device)
-    opponent = PolicyNet(OBS_SIZE, ACTION_SIZE, args.hidden_size).to(device)
-
+    resume_state = None
+    hidden_size = args.hidden_size
     if args.resume:
         best_path = os.path.join("runs", "agent_best.pt")
         resume_path = best_path if os.path.exists(best_path) else args.resume_path
         if os.path.exists(resume_path):
-            state = torch.load(resume_path, map_location=device)
-            agent.policy.load_state_dict(state)
+            resume_state = torch.load(resume_path, map_location=device)
+            if "fc1.weight" in resume_state:
+                hidden_size = int(resume_state["fc1.weight"].shape[0])
+
+    agent = PPOAgent(OBS_SIZE, ACTION_SIZE, hidden_size, args.lr, device)
+    opponent = PolicyNet(OBS_SIZE, ACTION_SIZE, hidden_size).to(device)
+
+    if resume_state is not None:
+        agent.policy.load_state_dict(resume_state)
     opponent.load_state_dict(agent.policy.state_dict())
     opponent.eval()
 

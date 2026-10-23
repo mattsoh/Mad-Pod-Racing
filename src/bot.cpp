@@ -137,6 +137,8 @@ int main() {
                              : normAngle(in[k][4]);
       p.shield = k < 2 ? tk.myShield[k] : 0;
       p.boostUsed = tk.podBoost[k];
+      if (tk.turn > 1) observeLastMove(p, tk.prev.p[k]);
+      else clearLastMove(p);
     }
     st.timeout[0] = tk.timeout[0];
     st.timeout[1] = tk.timeout[1];

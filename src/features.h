@@ -70,7 +70,24 @@ inline void duelFeatures(const State& s, const Track& tr, int run, int blk, floa
 // +x toward its next checkpoint. The other pods are its partner, then the
 // enemy runner and enemy blocker (whichever is further along is the runner).
 
-constexpr int N_FULL = 44;
+constexpr int N_FULL = 48;
+constexpr int F_LAST = 44;  // last-move inputs: rotation, thrust, touched, masked
+
+// What we can tell about each pod's last move from two consecutive inputs: the rotation from the integer
+// angles, and the thrust from the speed change, which without a touch points along the new heading (to
+// within the truncation of the speeds). `prev` and `s` are the states at the start of the last turn and of
+// this one. The bot, the trainer and the evaluator all go through this, so training sees what play sees.
+inline void observeLastMove(Pod& p, const Pod& prev) {
+  double c = std::cos(p.angle * DEG), sn = std::sin(p.angle * DEG);
+  double ax = p.vx / FRICTION - prev.vx, ay = p.vy / FRICTION - prev.vy;
+  double along = ax * c + ay * sn, side = -ax * sn + ay * c;
+  p.lastRot = (float)angleDiff(prev.angle, p.angle);
+  p.lastTouch = std::fabs(side) > 2.5 + 0.01 * std::fabs(along) || along < -3 ||
+                (along > MAX_THRUST + 3 && std::fabs(along - BOOST_THRUST) > 3);
+  p.lastThrust = p.lastTouch ? 0.f : (float)along;
+  p.lastMasked = false;
+}
+inline void clearLastMove(Pod& p) { p.lastRot = p.lastThrust = 0, p.lastTouch = p.lastMasked = false; }
 
 inline void fullFeatures(const State& s, const Track& tr, int i, float* f) {
   const Pod& P = s.p[i];
@@ -118,6 +135,12 @@ inline void fullFeatures(const State& s, const Track& tr, int i, float* f) {
   double lead = std::max(pi, pm) - progress(s.p[erun], tr);
   f[k++] = (float)std::max(-2.0, std::min(2.0, lead / 50000));
   f[k++] = boostAvailable(s, erun) ? 1.f : 0.f;
+  // last move (F_LAST): known only at the root of a rollout
+  bool known = !P.lastMasked;
+  f[k++] = known ? P.lastRot / (float)MAX_ROT : 0.f;
+  f[k++] = known && !P.lastTouch ? std::max(0.f, std::min((float)BOOST_THRUST, P.lastThrust)) / MAX_THRUST : 0.f;
+  f[k++] = known && P.lastTouch ? 1.f : 0.f;
+  f[k++] = known ? 0.f : 1.f;
 }
 
 // Imitation outputs. Top bots only ever rotate -18, 0 or +18 degrees and

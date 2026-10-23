@@ -21,6 +21,8 @@
 
 using namespace mpr;
 
+static bool g_hide = true;  // --hide 0: predict from the true state, as before the last-move inputs
+
 struct Game {
   long id;
   Track tr;
@@ -84,6 +86,7 @@ struct Score {
 int main(int argc, char** argv) {
   std::string data = "data/games.txt", netPath;
   int samples = 1500, teacherRank = 6, horizon = 1;
+  bool allGames = false;
   double searchMs = 10;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
@@ -94,6 +97,8 @@ int main(int argc, char** argv) {
     else if (a == "--search-ms") searchMs = std::stod(v());
     else if (a == "--teacher-rank") teacherRank = std::stoi(v());
     else if (a == "--horizon") horizon = std::stoi(v());
+    else if (a == "--hide") g_hide = std::stoi(v()) != 0;
+    else if (a == "--all") allGames = true;  // every game of --data (a held-out file), not bc's validation split
   }
   MLP net;
   bool haveNet = !netPath.empty() && loadNet(net, netPath);
@@ -101,7 +106,7 @@ int main(int argc, char** argv) {
   // validation games only (same split rule as tools/bc.cpp)
   std::vector<Game*> val;
   for (auto& g : games)
-    if ((g.id * 2654435761u >> 7) % 1000 < 100) val.push_back(&g);
+    if (allGames || (g.id * 2654435761u >> 7) % 1000 < 100) val.push_back(&g);
   printf("%zu validation games\n", val.size());
 
   const char* names[] = {"evolved (current bot)", "imitation network", "heuristic", "straight on (rot 0, 200)"};
@@ -117,9 +122,10 @@ int main(int argc, char** argv) {
     int teacher = g.rank[0] <= teacherRank ? 0 : g.rank[1] <= teacherRank ? 1 : -1;
     if (teacher < 0) continue;
     // replay to the sampled turn
-    State s;
+    State s, prev;
     initState(s, g.tr);
     for (int t = 0; t < target; ++t) {
+      prev = s;
       for (int k = 0; k < 4; ++k) {
         double x, y;
         int th, kd;
@@ -129,8 +135,16 @@ int main(int argc, char** argv) {
       step(s, g.tr);
     }
     if (s.winner >= 0) continue;
+    State real = s;
+    // What our bot sees (it predicts from this): integer angles, last moves, no teacher shields
+    for (int k = 0; k < 4; ++k) {
+      for (State* x : {&s, &prev}) x->p[k].angle = normAngle(roundHalfUp(x->p[k].angle)), x->p[k].rad = x->p[k].angle * DEG;
+      if (target > 1) observeLastMove(s.p[k], prev.p[k]);
+      else clearLastMove(s.p[k]);
+      if (k >> 1 == teacher && g_hide) s.p[k].shield = 0;
+    }
     // the truth
-    State truth = s;
+    State truth = real;
     for (int k = 0; k < 4; ++k) {
       double x, y;
       int th, kd;

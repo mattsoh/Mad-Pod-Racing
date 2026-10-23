@@ -7,6 +7,7 @@ scopes challenge:read challenge:play are enough, no submit). The token is read f
     python3 tools/cg_api.py test --code dist/mad_pod_bot.cpp --label v5 --opponent Discourage --games 10
     python3 tools/cg_api.py test --code build/x.cpp --label x --replays losses   # re-run our lost battles, same seat/map/opponent
     python3 tools/cg_api.py summary                       # results per label; paired comparison on shared replays
+    python3 tools/cg_api.py code --out sub.cpp [--submission ID]   # a submission's code (default: the current one)
 
 Results go to data/cg/tests.jsonl (one line per test game, resumable: a (label, key) already there is skipped).
 Test-game limits are about 10/min, 20/5 min, 80/hour, 200/6 hours: the runner waits whenever a window is used up.
@@ -174,6 +175,17 @@ def summary(_a):
                 print(f"paired on {len(common)} replays: {labels[i]} wins {sum(A[k] for k in common)}, {labels[j]} wins "
                       f"{sum(B[k] for k in common)}; only {labels[i]} won {ab}, only {labels[j]} won {ba}")
 
+def code(a):
+    """Saves the code of a submission, e.g. to check which version is on the ladder."""
+    if not a.submission:
+        _, d = req("GET", f"/puzzles/{PUZZLE}/submissions")
+        a.submission = next(x["submission_id"] for x in d["submissions"] if x.get("current"))
+    st, d = req("GET", f"/puzzles/{PUZZLE}/submissions/{a.submission}")
+    if st != 200:
+        sys.exit(f"submission {a.submission}: {st} {d}")
+    open(a.out, "w").write(d["code"])
+    print(f"submission {a.submission} ({d.get('language')}): {len(d['code']):,} characters -> {a.out}")
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -187,8 +199,11 @@ def main():
     t.add_argument("--replays", help="'losses' (from the last battles sync) or comma-separated game ids")
     t.add_argument("--limit", type=int, default=1000, help="at most this many replays")
     sub.add_parser("summary")
+    c = sub.add_parser("code")
+    c.add_argument("--out", required=True)
+    c.add_argument("--submission", type=int)
     a = ap.parse_args()
-    {"battles": battles, "test": test, "summary": summary}[a.cmd](a)
+    {"battles": battles, "test": test, "summary": summary, "code": code}[a.cmd](a)
 
 
 if __name__ == "__main__":

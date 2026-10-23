@@ -24,7 +24,10 @@ inline const MLP& botNet() {
   }
   return m;
 }
-inline bool bcNet() { return botNet().inputs() == N_FULL && botNet().outputs() == BC_OUT; }
+// Networks from before the last-move inputs (44 inputs, e.g. bc160_t15) still work: they read the first 44.
+inline bool bcNet() {
+  return (botNet().inputs() == N_FULL || botNet().inputs() == F_LAST) && botNet().outputs() == BC_OUT;
+}
 inline bool duelNet() { return botNet().inputs() == N_IN && botNet().outputs() == N_OUT; }
 inline bool nnAvailable() { return bcNet() || duelNet(); }
 

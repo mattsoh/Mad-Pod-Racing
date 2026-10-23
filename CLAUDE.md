@@ -3,7 +3,19 @@
 C++17 bot for CodinGame's Mad Pod Racing, Legend league. Owner: mattsoh (Legend #261 with an older
 Python bot when this started). Goal: climb Legend. Read README.md for layout, tools and results.
 
-## Current state (v5, shipped as dist/mad_pod_bot.cpp; v4 kept as dist/mad_pod_bot_v4.cpp)
+## Current state (v6 in dist/mad_pod_bot.cpp, not yet proven on the ladder; v5 kept as dist/mad_pod_bot_v5.cpp)
+- v6 = v5 + a faster engine (cast-based floor/trunc, interpolated trig table in applyMove; replays still exact)
+  + network `nets/bcl_s` (44+4 inputs: each pod's last move, masked after a rollout's first step; trained by
+  bc.cpp on what our bot sees: the predicted team's shields hidden, reload turns labelled thrust 0) on 1,669
+  top-20 replays + 628 of our battles. 6-turn prediction error on 71 held-out games: 678 vs bc160_t15's 737.
+  Arena vs v5 at 40 ms: **59.8%** (239-161 over 2 seeds). `make bundle WEIGHTS=nets/bcl_s_weights.h` (99.7k).
+- Calibration on the cloud container (4 cores): 40 ms there = CodinGame's 55 ms; run the arena with -j 2,
+  since it plays both bots of a game at once.
+- Lesson: the previous attempt (v5 + faster engine + a net fine-tuned on only our 628 battles) won 61.5% in
+  a local arena and TIED v5 on the ladder (42.53 vs 42.54). CodinGame test games cannot separate such
+  versions either: two near-identical bots disagreed on 12 of 33 identical games. Only the ladder decides.
+
+## v5 (previously shipped; v4 kept as dist/mad_pod_bot_v4.cpp)
 - Evolutionary search over 6-turn plans (src/search.h) + imitation network (nets/bc160_t15, 44-160-160-7,
   trained on 2.5M moves of the top 15 Legend bots) used as the opponent model and as a seed ("hybrid").
 - v5 = v4 + robust scoring against two opponent predictions (`robustW=1`, see below) + `blockStick` 3000,

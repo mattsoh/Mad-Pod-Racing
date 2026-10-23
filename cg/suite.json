@@ -1,0 +1,362 @@
+[
+{
+"i": 0,
+"opp": "l4time",
+"agent_id": 6788152,
+"options": "seed=2035525363\npod_timeout=100\nmap=5666 2582 4101 7423 13518 2342 12929 7239\npod_per_player=2"
+},
+{
+"i": 1,
+"opp": "morph",
+"agent_id": 6759955,
+"options": "seed=847877000\npod_timeout=100\nmap=13607 7592 12439 1337 10526 5980 3579 5184\npod_per_player=2"
+},
+{
+"i": 2,
+"opp": "Discourage",
+"agent_id": 6807509,
+"options": "seed=155555738\npod_timeout=100\nmap=10681 2264 8723 7465 7179 2148 3623 5273 13836 5057\npod_per_player=2"
+},
+{
+"i": 3,
+"opp": "sffsefsdfaf",
+"agent_id": 6807732,
+"options": "seed=202142729\npod_timeout=100\nmap=9565 1401 3615 4412 7993 7891 13317 5529\npod_per_player=2"
+},
+{
+"i": 4,
+"opp": "utfart",
+"agent_id": 6791800,
+"options": "seed=1251527727\npod_timeout=100\nmap=6103 2211 3007 5200 6274 7743 14077 7737 13874 1211 10245 4910\npod_per_player=2"
+},
+{
+"i": 5,
+"opp": "DaNinja",
+"agent_id": 6802311,
+"options": "seed=1953574603\npod_timeout=100\nmap=11203 5408 7257 6649 5453 2851 10318 3365\npod_per_player=2"
+},
+{
+"i": 6,
+"opp": "magaiti",
+"agent_id": 4339613,
+"options": "seed=461060839\npod_timeout=100\nmap=9121 1813 5021 5279 11451 6086\npod_per_player=2"
+},
+{
+"i": 7,
+"opp": "naab",
+"agent_id": 2267000,
+"options": "seed=184570286\npod_timeout=100\nmap=10577 5031 13108 2327 4573 2207 7361 4915 3337 7218 14603 7727\npod_per_player=2"
+},
+{
+"i": 8,
+"opp": "IGGY",
+"agent_id": 3329115,
+"options": "seed=898017870\npod_timeout=100\nmap=7503 6936 6016 5374 11275 2838\npod_per_player=2"
+},
+{
+"i": 9,
+"opp": "luckyy",
+"agent_id": 5377450,
+"options": "seed=516819859\npod_timeout=100\nmap=11451 6074 9114 1817 5000 5233\npod_per_player=2"
+},
+{
+"i": 10,
+"opp": "l4time",
+"agent_id": 6788152,
+"options": "seed=1183364968\npod_timeout=100\nmap=12695 7120 4040 4685 13067 1903 6569 7851 7509 1357\npod_per_player=2"
+},
+{
+"i": 11,
+"opp": "morph",
+"agent_id": 6759955,
+"options": "seed=126938844\npod_timeout=100\nmap=7450 1370 12702 7092 4031 4651 13045 1896 6557 7841\npod_per_player=2"
+},
+{
+"i": 12,
+"opp": "Discourage",
+"agent_id": 6807509,
+"options": "seed=2034632751\npod_timeout=100\nmap=13119 2317 4538 2159 7340 4960 3291 7258 14566 7673 10574 5045\npod_per_player=2"
+},
+{
+"i": 13,
+"opp": "sffsefsdfaf",
+"agent_id": 6807732,
+"options": "seed=1354258845\npod_timeout=100\nmap=2661 7000 10044 5955 13936 1942 8042 3235\npod_per_player=2"
+},
+{
+"i": 14,
+"opp": "utfart",
+"agent_id": 6791800,
+"options": "seed=1239319144\npod_timeout=100\nmap=11220 5405 7261 6672 5439 2808 10303 3394\npod_per_player=2"
+},
+{
+"i": 15,
+"opp": "DaNinja",
+"agent_id": 6802311,
+"options": "seed=106492239\npod_timeout=100\nmap=7201 2145 3614 5255 13837 5095 10684 2263 8714 7454\npod_per_player=2"
+},
+{
+"i": 16,
+"opp": "magaiti",
+"agent_id": 4339613,
+"options": "seed=100035545\npod_timeout=100\nmap=2652 7015 10050 5970 13890 1919 8007 3265\npod_per_player=2"
+},
+{
+"i": 17,
+"opp": "naab",
+"agent_id": 2267000,
+"options": "seed=621931212\npod_timeout=100\nmap=13472 2335 12967 7197 5643 2594 4070 7447\npod_per_player=2"
+},
+{
+"i": 18,
+"opp": "IGGY",
+"agent_id": 3329115,
+"options": "seed=309785427\npod_timeout=100\nmap=7287 6674 5443 2814 10298 3380 11220 5433\npod_per_player=2"
+},
+{
+"i": 19,
+"opp": "luckyy",
+"agent_id": 5377450,
+"options": "seed=252956897\npod_timeout=100\nmap=9583 1400 3644 4412 8007 7883 13280 5525\npod_per_player=2"
+},
+{
+"i": 20,
+"opp": "l4time",
+"agent_id": 6788152,
+"options": "seed=1203143341\npod_timeout=100\nmap=5444 2843 10294 3384 11222 5442 7232 6650\npod_per_player=2"
+},
+{
+"i": 21,
+"opp": "morph",
+"agent_id": 6759955,
+"options": "seed=221310450\npod_timeout=100\nmap=13890 1946 8005 3233 2684 6997 10048 5946\npod_per_player=2"
+},
+{
+"i": 22,
+"opp": "Discourage",
+"agent_id": 6807509,
+"options": "seed=799717634\npod_timeout=100\nmap=13895 1967 7996 3259 2684 6995 10011 5970\npod_per_player=2"
+},
+{
+"i": 23,
+"opp": "sffsefsdfaf",
+"agent_id": 6807732,
+"options": "seed=1176272277\npod_timeout=100\nmap=12709 7096 4042 4683 13051 1908 6546 7811 7450 1387\npod_per_player=2"
+},
+{
+"i": 24,
+"opp": "utfart",
+"agent_id": 6791800,
+"options": "seed=1211971682\npod_timeout=100\nmap=11223 5407 7264 6668 5411 2853 10320 3367\npod_per_player=2"
+},
+{
+"i": 25,
+"opp": "DaNinja",
+"agent_id": 6802311,
+"options": "seed=1329312985\npod_timeout=100\nmap=11207 5409 7269 6669 5418 2857 10340 3379\npod_per_player=2"
+},
+{
+"i": 26,
+"opp": "magaiti",
+"agent_id": 4339613,
+"options": "seed=1066042003\npod_timeout=100\nmap=14576 7687 10562 5080 13074 2334 4568 2190 7346 4923 3343 7216\npod_per_player=2"
+},
+{
+"i": 27,
+"opp": "naab",
+"agent_id": 2267000,
+"options": "seed=918247488\npod_timeout=100\nmap=9544 4403 14513 7775 6294 4274 7798 879 7683 5955 3118 7538\npod_per_player=2"
+},
+{
+"i": 28,
+"opp": "IGGY",
+"agent_id": 3329115,
+"options": "seed=999872393\npod_timeout=100\nmap=5628 2550 4096 7417 13511 2354 12964 7220\npod_per_player=2"
+},
+{
+"i": 29,
+"opp": "luckyy",
+"agent_id": 5377450,
+"options": "seed=776492205\npod_timeout=100\nmap=7794 831 7664 5970 3126 7562 9498 4379 14501 7751 6294 4314\npod_per_player=2"
+},
+{
+"i": 30,
+"opp": "l4time",
+"agent_id": 6788152,
+"options": "seed=533492028\npod_timeout=100\nmap=5022 5278 11455 6081 9074 1858\npod_per_player=2"
+},
+{
+"i": 31,
+"opp": "morph",
+"agent_id": 6759955,
+"options": "seed=1501079115\npod_timeout=100\nmap=13890 1946 8005 3233 2684 6997 10048 5946\npod_per_player=2"
+},
+{
+"i": 32,
+"opp": "Discourage",
+"agent_id": 6807509,
+"options": "seed=175782304\npod_timeout=100\nmap=3310 7210 14575 7685 10556 5063 13125 2313 4577 2201 7347 4954\npod_per_player=2"
+},
+{
+"i": 33,
+"opp": "sffsefsdfaf",
+"agent_id": 6807732,
+"options": "seed=1127850897\npod_timeout=100\nmap=5022 5278 11455 6081 9074 1858\npod_per_player=2"
+},
+{
+"i": 34,
+"opp": "utfart",
+"agent_id": 6791800,
+"options": "seed=1879343460\npod_timeout=100\nmap=9073 1814 4992 5281 11510 6085\npod_per_player=2"
+},
+{
+"i": 35,
+"opp": "DaNinja",
+"agent_id": 6802311,
+"options": "seed=1566471825\npod_timeout=100\nmap=6002 5348 11322 2792 7483 6921\npod_per_player=2"
+},
+{
+"i": 36,
+"opp": "magaiti",
+"agent_id": 4339613,
+"options": "seed=618341637\npod_timeout=100\nmap=7775 854 7667 5998 3152 7513 9516 4376 14497 7800 6333 4266\npod_per_player=2"
+},
+{
+"i": 37,
+"opp": "naab",
+"agent_id": 2267000,
+"options": "seed=253544329\npod_timeout=100\nmap=11495 6064 9091 1827 5015 5257\npod_per_player=2"
+},
+{
+"i": 38,
+"opp": "IGGY",
+"agent_id": 3329115,
+"options": "seed=897911925\npod_timeout=100\nmap=9418 7250 5946 4264 14673 1428 3436 7191\npod_per_player=2"
+},
+{
+"i": 39,
+"opp": "luckyy",
+"agent_id": 5377450,
+"options": "seed=1625947776\npod_timeout=100\nmap=13851 1206 10228 4948 6109 2196 2994 5172 6291 7777 14110 7764\npod_per_player=2"
+},
+{
+"i": 40,
+"opp": "l4time",
+"agent_id": 6788152,
+"options": "seed=326384299\npod_timeout=100\nmap=6002 5348 11322 2792 7483 6921\npod_per_player=2"
+},
+{
+"i": 41,
+"opp": "morph",
+"agent_id": 6759955,
+"options": "seed=905590325\npod_timeout=100\nmap=8687 7466 7189 2175 3610 5267 13810 5050 10690 2285\npod_per_player=2"
+},
+{
+"i": 42,
+"opp": "Discourage",
+"agent_id": 6807509,
+"options": "seed=2065920251\npod_timeout=100\nmap=10664 2274 8692 7460 7173 2179 3593 5267 13812 5088\npod_per_player=2"
+},
+{
+"i": 43,
+"opp": "sffsefsdfaf",
+"agent_id": 6807732,
+"options": "seed=1641903440\npod_timeout=100\nmap=11508 6083 9108 1838 5007 5249\npod_per_player=2"
+},
+{
+"i": 44,
+"opp": "utfart",
+"agent_id": 6791800,
+"options": "seed=730407202\npod_timeout=100\nmap=5628 2550 4096 7417 13511 2354 12964 7220\npod_per_player=2"
+},
+{
+"i": 45,
+"opp": "DaNinja",
+"agent_id": 6802311,
+"options": "seed=1276399591\npod_timeout=100\nmap=6015 5368 11303 2807 7524 6951\npod_per_player=2"
+},
+{
+"i": 46,
+"opp": "magaiti",
+"agent_id": 4339613,
+"options": "seed=1245315470\npod_timeout=100\nmap=9083 1836 5037 5282 11495 6091\npod_per_player=2"
+},
+{
+"i": 47,
+"opp": "naab",
+"agent_id": 2267000,
+"options": "seed=147667305\npod_timeout=100\nmap=7806 881 7674 5968 3153 7521 9493 4358 14512 7775 6334 4268\npod_per_player=2"
+},
+{
+"i": 48,
+"opp": "IGGY",
+"agent_id": 3329115,
+"options": "seed=2028687212\npod_timeout=100\nmap=12701 7089 4045 4662 13035 1871 6539 7855 7495 1370\npod_per_player=2"
+},
+{
+"i": 49,
+"opp": "luckyy",
+"agent_id": 5377450,
+"options": "seed=1018118421\npod_timeout=100\nmap=4039 4673 13033 1888 6556 7850 7510 1331 12727 7098\npod_per_player=2"
+},
+{
+"i": 50,
+"opp": "l4time",
+"agent_id": 6788152,
+"options": "seed=130286598\npod_timeout=100\nmap=11278 2794 7478 6966 5981 5336\npod_per_player=2"
+},
+{
+"i": 51,
+"opp": "morph",
+"agent_id": 6759955,
+"options": "seed=1389698625\npod_timeout=100\nmap=5449 2849 10322 3387 11176 5413 7285 6656\npod_per_player=2"
+},
+{
+"i": 52,
+"opp": "Discourage",
+"agent_id": 6807509,
+"options": "seed=611164248\npod_timeout=100\nmap=7774 842 7633 5963 3119 7547 9535 4398 14527 7756 6312 4310\npod_per_player=2"
+},
+{
+"i": 53,
+"opp": "sffsefsdfaf",
+"agent_id": 6807732,
+"options": "seed=1904904517\npod_timeout=100\nmap=6567 7814 7501 1355 12701 7109 4036 4633 13063 1927\npod_per_player=2"
+},
+{
+"i": 54,
+"opp": "utfart",
+"agent_id": 6791800,
+"options": "seed=48453508\npod_timeout=100\nmap=6008 5374 11324 2846 7471 6920\npod_per_player=2"
+},
+{
+"i": 55,
+"opp": "DaNinja",
+"agent_id": 6802311,
+"options": "seed=763353365\npod_timeout=100\nmap=8001 3286 2672 7041 10012 5983 13918 1936\npod_per_player=2"
+},
+{
+"i": 56,
+"opp": "magaiti",
+"agent_id": 4339613,
+"options": "seed=1311939741\npod_timeout=100\nmap=13858 5079 10710 2279 8689 7470 7197 2180 3583 5297\npod_per_player=2"
+},
+{
+"i": 57,
+"opp": "naab",
+"agent_id": 2267000,
+"options": "seed=1060197638\npod_timeout=100\nmap=13057 1919 6553 7857 7486 1378 12700 7122 4039 4656\npod_per_player=2"
+},
+{
+"i": 58,
+"opp": "IGGY",
+"agent_id": 3329115,
+"options": "seed=468597630\npod_timeout=100\nmap=11207 5409 7269 6669 5418 2857 10340 3379\npod_per_player=2"
+},
+{
+"i": 59,
+"opp": "luckyy",
+"agent_id": 5377450,
+"options": "seed=277756008\npod_timeout=100\nmap=4548 2185 7326 4963 3316 7240 14601 7723 10587 5058 13102 2348\npod_per_player=2"
+}
+]

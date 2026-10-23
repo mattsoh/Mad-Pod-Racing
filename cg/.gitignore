@@ -1,0 +1,4 @@
+build/
+data/
+nets/*.pt
+__pycache__/

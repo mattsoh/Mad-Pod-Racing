@@ -1,0 +1,8 @@
+build/
+replays/
+logs/
+ref/
+*.o
+__pycache__/
+data/
+replays_*/

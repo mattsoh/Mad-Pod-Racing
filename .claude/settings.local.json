@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -I tools/replay_trace.py data/losses/909123192.json.gz)",
+      "Bash(python3 -I tools/replay_trace.py data/losses/909123117.json.gz)",
+      "Bash(python3 -I tools/replay_trace.py data/losses/909113931.json.gz)",
+      "Bash(python3 -I tools/replay_trace.py data/losses/909123082.json.gz)",
+      "Bash(python3 -I tools/replay_trace.py data/losses/909121718.json.gz)",
+      "Bash(python3 -I tools/replay_trace.py data/losses/909119183.json.gz)",
+      "Bash(python3 -I -c ' *)",
+      "Read(//home/matthew/.config/codingame/**)",
+      "Bash(awk '{print $1, $5, $9}')"
+    ]
+  }
+}

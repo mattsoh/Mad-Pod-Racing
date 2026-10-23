@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pod Replay Viewer</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #dedcd5;
+    --track: #e9e7e0; --cp: #9b9890; --team0: #e07a2f; --team1: #2f6fe0; --accent: #1d1d1b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151514; --panel: #1f1f1d; --ink: #ecebe6; --muted: #9a9890; --line: #33332f;
+            --track: #262624; --cp: #6f6d66; --team0: #f0924a; --team1: #5b8ff0; --accent: #ecebe6; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  header { display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0 8px 0 0; font-weight: 600; }
+  main { display: grid; grid-template-columns: 220px 1fr; gap: 0; min-height: calc(100vh - 53px); }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } #games { max-height: 140px; } }
+  #games { border-right: 1px solid var(--line); overflow: auto; padding: 8px; }
+  #games button { display: block; width: 100%; text-align: left; padding: 6px 8px; margin: 2px 0; border: 1px solid transparent;
+                  background: none; color: var(--ink); border-radius: 6px; cursor: pointer; font: inherit; }
+  #games button.on { border-color: var(--line); background: var(--panel); }
+  #games small { color: var(--muted); }
+  #stage { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  canvas { width: 100%; height: auto; background: var(--track); border-radius: 8px; display: block; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  input[type=range] { flex: 1; min-width: 160px; }
+  button.ctl, select, label.file { font: inherit; padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px;
+                    background: var(--panel); color: var(--ink); cursor: pointer; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td, th { padding: 3px 10px 3px 0; text-align: left; }
+  th { color: var(--muted); font-weight: 500; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  #drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 28px; text-align: center; color: var(--muted); }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pod Replay Viewer</h1>
+  <label class="file">Open replays<input id="file" type="file" accept=".json" multiple hidden></label>
+  <span class="muted">JSON files from <code>build/arena --replays DIR</code>. Space plays, arrow keys step.</span>
+</header>
+<main>
+  <nav id="games"></nav>
+  <section id="stage">
+    <div id="drop">Drop replay files here</div>
+    <canvas id="cv" width="1600" height="900" hidden></canvas>
+    <div class="row" id="controls" hidden>
+      <button class="ctl" id="play">Play</button>
+      <button class="ctl" id="back">&larr;</button>
+      <button class="ctl" id="fwd">&rarr;</button>
+      <input type="range" id="slider" min="0" value="0">
+      <span id="turn" class="muted"></span>
+      <select id="speed"><option value="4">0.25x</option><option value="8">0.5x</option>
+        <option value="15" selected>1x</option><option value="30">2x</option><option value="60">4x</option></select>
+    </div>
+    <div id="info"></div>
+  </section>
+</main>
+<script>
+const S = 1600 / 16000;  // canvas units per map unit
+let games = [], cur = null, frame = 0, playing = false, last = 0;
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function load(files) {
+  for (const f of files) {
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const g = JSON.parse(r.result);
+        g.name = f.name;
+        games.push(g);
+        games.sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+        list();
+        if (!cur) pick(g);
+      } catch (e) { alert(f.name + ': not a replay (' + e.message + ')'); }
+    };
+    r.readAsText(f);
+  }
+}
+
+function list() {
+  $('games').innerHTML = '';
+  for (const g of games) {
+    const b = document.createElement('button');
+    b.className = g === cur ? 'on' : '';
+    const winner = g.bots ? g.bots[g.winner] : 'team ' + g.winner;
+    b.innerHTML = `${g.name}<br><small>${g.frames.length - 1} turns · ${g.checkpoints.length} CPs · winner ${esc(short(winner))}</small>`;
+    b.onclick = () => pick(g);
+    $('games').appendChild(b);
+  }
+}
+const short = s => (s || '').split('/').pop();
+const esc = s => s.replace(/[&<>]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c]));
+
+function pick(g) {
+  cur = g; frame = 0; playing = false; $('play').textContent = 'Play';
+  $('drop').hidden = true; $('cv').hidden = false; $('controls').hidden = false;
+  $('slider').max = g.frames.length - 1;
+  list(); draw();
+}
+
+function draw() {
+  if (!cur) return;
+  const cv = $('cv'), c = cv.getContext('2d');
+  const team = [css('--team0'), css('--team1')], ink = css('--ink'), cpCol = css('--cp');
+  c.clearRect(0, 0, cv.width, cv.height);
+  const cps = cur.checkpoints;
+  c.lineWidth = 2;
+  cps.forEach(([x, y], i) => {
+    c.beginPath(); c.arc(x * S, y * S, 600 * S, 0, 7);
+    c.strokeStyle = cpCol; c.setLineDash(i === 0 ? [6, 4] : []); c.stroke(); c.setLineDash([]);
+    c.fillStyle = cpCol; c.font = '600 22px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(i, x * S, y * S);
+  });
+  const fr = cur.frames[frame];
+  // trails
+  for (let k = 0; k < 4; k++) {
+    c.beginPath();
+    for (let t = Math.max(0, frame - 25); t <= frame; t++) {
+      const p = cur.frames[t].pods[k];
+      t === Math.max(0, frame - 25) ? c.moveTo(p[0] * S, p[1] * S) : c.lineTo(p[0] * S, p[1] * S);
+    }
+    c.strokeStyle = team[k >> 1]; c.globalAlpha = 0.35; c.lineWidth = 2; c.stroke(); c.globalAlpha = 1;
+  }
+  fr.pods.forEach((p, k) => {
+    const [x, y, vx, vy, ang, next, passed, shield] = p, col = team[k >> 1];
+    const a = ang * Math.PI / 180;
+    // line to next checkpoint
+    c.beginPath(); c.moveTo(x * S, y * S); c.lineTo(cps[next][0] * S, cps[next][1] * S);
+    c.strokeStyle = col; c.globalAlpha = 0.15; c.lineWidth = 1.5; c.stroke(); c.globalAlpha = 1;
+    c.beginPath(); c.arc(x * S, y * S, 400 * S, 0, 7);
+    c.fillStyle = col; c.globalAlpha = 0.18; c.fill(); c.globalAlpha = 1;
+    c.strokeStyle = col; c.lineWidth = shield === 3 ? 6 : 2; c.stroke();
+    c.beginPath(); c.moveTo(x * S, y * S); c.lineTo((x + Math.cos(a) * 600) * S, (y + Math.sin(a) * 600) * S);
+    c.strokeStyle = ink; c.lineWidth = 2.5; c.stroke();
+    c.beginPath(); c.moveTo(x * S, y * S); c.lineTo((x + vx * 2) * S, (y + vy * 2) * S);
+    c.strokeStyle = col; c.lineWidth = 2; c.stroke();
+    c.fillStyle = ink; c.font = '600 16px system-ui'; c.fillText(k, x * S, (y - 520) * S);
+  });
+  $('slider').value = frame;
+  $('turn').textContent = `turn ${frame} / ${cur.frames.length - 1}`;
+  const total = cps.length * cur.laps;
+  let rows = '';
+  fr.pods.forEach((p, k) => {
+    const who = cur.bots ? short(cur.bots[k >> 1]) : 'team ' + (k >> 1);
+    rows += `<tr><td><span class="dot" style="background:${team[k >> 1]}"></span>pod ${k}</td><td>${esc(who)}</td>
+      <td>${p[6]}/${total}</td><td>${Math.round(Math.hypot(p[2], p[3]))}</td><td>${p[7] ? 'shield ' + p[7] : ''}</td>
+      <td class="muted">${esc(fr.msg ? fr.msg[k] : '')}</td></tr>`;
+  });
+  const end = frame === cur.frames.length - 1
+    ? `<p>Winner: <b>${esc(short(cur.bots ? cur.bots[cur.winner] : 'team ' + cur.winner))}</b> (${esc(cur.reason)})</p>` : '';
+  $('info').innerHTML = `<table><tr><th>Pod</th><th>Bot</th><th>Checkpoints</th><th>Speed</th><th></th><th>Message</th></tr>${rows}</table>
+    <p class="muted">Checkpoint timeout: team 0 ${fr.timeout[0]}, team 1 ${fr.timeout[1]}</p>${end}`;
+}
+
+function tick(ts) {
+  if (playing && cur && ts - last > 1000 / +$('speed').value) {
+    last = ts;
+    if (frame < cur.frames.length - 1) { frame++; draw(); } else { playing = false; $('play').textContent = 'Play'; }
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+$('file').onchange = e => load(e.target.files);
+$('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; };
+$('back').onclick = () => { frame = Math.max(0, frame - 1); draw(); };
+$('fwd').onclick = () => { if (cur) { frame = Math.min(cur.frames.length - 1, frame + 1); draw(); } };
+$('slider').oninput = e => { frame = +e.target.value; draw(); };
+addEventListener('keydown', e => {
+  if (!cur || e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+  if (e.key === ' ') { e.preventDefault(); $('play').click(); }
+  if (e.key === 'ArrowLeft') $('back').click();
+  if (e.key === 'ArrowRight') $('fwd').click();
+});
+['dragover', 'drop'].forEach(ev => addEventListener(ev, e => {
+  e.preventDefault();
+  if (ev === 'drop') load(e.dataTransfer.files);
+}));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+</script>
+</body>
+</html>

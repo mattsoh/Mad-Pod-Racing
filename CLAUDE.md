@@ -15,6 +15,22 @@ Python bot when this started). Goal: climb Legend. Read README.md for layout, to
   a local arena and TIED v5 on the ladder (42.53 vs 42.54). CodinGame test games cannot separate such
   versions either: two near-identical bots disagreed on 12 of 33 identical games. Only the ladder decides.
 
+- LADDER RESULT for v6 (submission 41554993, 220 games): **41.98, rank 42** vs v5's 42.54 (#17). By opponent
+  rank: top 12 0-18 (v5 0-16), 13-25 40% (v5 35%), 26-60 61% (v5 71%), below 60 all won. Not a prediction
+  problem: bcl_s predicts ranks 26-60 better than bc160_t15 (798.9 vs 868.2 units at 6 turns, 63.1 vs 81.3 at 1).
+  Three arena "wins" over v5 (61.5%, 56.8%, 59.8%) have now given a tie and a loss on the ladder: the arena,
+  where the opponent is our own bot, does not predict the ladder for opponent-model changes.
+- What v6's real games show (tools/pin_stats.py on 220 v6 games vs 2,737 top-15 sides; `python3
+  tools/arena_boosts.py DIR` for arena replays): pinned runner coasts (thrust 0) 9% of pinned turns vs top 28%,
+  SHIELDs 8% vs 4.5%, BOOSTs 0.1% vs 3.3%, speed toward the checkpoint 8 vs 47, episode p90 40 vs 26. Boosts:
+  we use both in 93% of games, first at median turn 15 (top: 66%, turn 41, 24% never used); 56% of ours in
+  the first 20 turns and 55% by the blocker (top: 12% in the first 20, 74% after turn 60, 88% by the runner).
+- Knobs tried for that (off by default; 200 games vs v6 at 40 ms): `boostBlkW` (extra value of the root
+  blocker's unused boost) 4000 53% (runner share of boosts 50 -> 64%), 10000 48%; `boostEarly=2` (unused boost
+  worth boostW * (1 + 2 * race left)) 48%, and the start boost barely moves (37 -> 34% on turns 0-2). The search
+  finds the start boost worth more than 7,500. Neutral in the arena; untested on the ladder.
+- tools/bundle.py now also strips trailing comments (lines without string literals) when over the limit.
+
 ## v5 (previously shipped; v4 kept as dist/mad_pod_bot_v4.cpp)
 - Evolutionary search over 6-turn plans (src/search.h) + imitation network (nets/bc160_t15, 44-160-160-7,
   trained on 2.5M moves of the top 15 Legend bots) used as the opponent model and as a seed ("hybrid").

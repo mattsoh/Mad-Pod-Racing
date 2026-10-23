@@ -40,6 +40,8 @@ def strip_comments(lines):
         s = line.strip()
         if not s or (s.startswith("//") and '"' not in s):
             continue
+        if "//" in line and '"' not in line and "'" not in line:  # trailing comment, no literal on the line
+            line = line[:line.index("//")].rstrip() + "\n"
         out.append(line)
     return out
 

@@ -57,6 +57,12 @@ struct EvalParams {
   double rescueSpeedW = 3.0;  // per unit of the blocker's speed toward it
   double rescueLead = 10;     // no rescue while our clock leads theirs by more than this (in a mutual pin, whoever breaks off first loses the race; 0 = off)
   double rescueOf[2] = {0, 0};  // set each turn from the root: how urgently each team's blocker must go (0..1)
+  // Extra value of the BOOST still unused by the pod that is our blocker at the root. Top-15 bots fire 88% of
+  // their boosts with the runner, 74% after turn 60 (to break pins and sprint); v5/v6 fired 55% with the
+  // blocker and over half in the first 20 turns, then had none left for pins (0.1% of pinned turns vs 3.3%).
+  double boostBlkW = 0;
+  double boostEarly = 0;      // our unused boosts are worth boostW * (1 + boostEarly * share of the race still to run)
+  int rootBlk[2] = {1, 3};    // set each turn from the root: each team's blocker
   double snapP = 0.125;       // chance a mutation snaps to the top bots' moves (-18/0/+18 deg, thrust 0/200)
   double boostW = 2500;       // value of each BOOST still unused at the horizon (top bots save theirs; 0 lost 39% vs v1, 2000-4000 won ~80%)
   double blockOff = 1000;     // blocker: waits this far in front of the checkpoint, toward the enemy runner (top bots: 700-1100)
@@ -100,6 +106,8 @@ struct EvalParams {
         else if (k == "boostW") boostW = v;
         else if (k == "blockOff") blockOff = v;
         else if (k == "blockLead") blockLead = v;
+        else if (k == "boostBlkW") boostBlkW = v;
+        else if (k == "boostEarly") boostEarly = v;
         else if (k == "blockStick") blockStick = v;
         else if (k == "shieldUseW") shieldUseW = v;
         else if (k == "robustW") robustW = v;
@@ -184,10 +192,12 @@ inline double evaluate(const State& s, const Track& tr, int team, int depth, con
     if (g_sharedBoost) {
       score += P.boostW * ((s.teamBoostUsed[team] ? 0 : 1) - (s.teamBoostUsed[1 - team] ? 0 : 1));
     } else {
-      score += P.boostW * ((s.p[a].boostUsed ? 0 : 1) + (s.p[b].boostUsed ? 0 : 1));
+      double left = 1.0 - std::max(s.p[a].passed, s.p[b].passed) / (double)tr.total();
+      score += P.boostW * (1 + P.boostEarly * left) * ((s.p[a].boostUsed ? 0 : 1) + (s.p[b].boostUsed ? 0 : 1));
       score -= P.boostW * ((s.p[c].boostUsed ? 0 : 1) + (s.p[d].boostUsed ? 0 : 1));
     }
   }
+  if (P.boostBlkW != 0 && !s.p[P.rootBlk[team]].boostUsed) score += P.boostBlkW;
   score -= P.timeoutW * std::max(0, 25 - s.timeout[team]);
   score += P.timeoutW * std::max(0, 25 - s.timeout[1 - team]);
   return score;
@@ -404,6 +414,7 @@ struct Search {
     for (int t = 0; t < 2; ++t) {
       int run, blk;
       roles(root, tr, t, run, blk);
+      P.rootBlk[t] = blk;
       const Pod& B = root.p[blk];
       double need = dist(B.x, B.y, tr.x[B.next], tr.y[B.next]) / P.rescueSpeed + P.rescueTurn;
       P.rescueOf[t] = std::max(0.0, std::min(1.0, (P.rescueSlack - (root.timeout[t] - need)) / P.rescueSlack));

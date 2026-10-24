@@ -7,8 +7,8 @@ Python bot when this started). Goal: climb Legend. Read README.md for layout, to
 - v9 = v8 + `blkPriorW=300`: a soft prior toward the imitation network's move for OUR BLOCKER on the plan's
   first turn (cost 300 per unit of deviation: |rotation|/18 + 1 if the thrust kind differs). Top-15 second
   pods mark the enemy blocker and double-team its runner 2-3x more than ours; the network imitates that,
-  while the hand-written blocker terms pull ours to a fixed post. vs v7: **70.8%** (283-117, seeds 21+37);
-  1000: 55.8% (400), 3000: 47.8% (400). On top of v8: **63.5%** (254-146, seeds 21+37). Turn-time
+  while the hand-written blocker terms pull ours to a fixed post. vs v7: **70.3%** (422-178, seeds 21/37/53);
+  150: 65.8% (400), 1000: 55.8% (400), 3000: 47.8% (400) -- 300 is the peak. On top of v8: **63.5%** (254-146, seeds 21+37). Turn-time
   distribution identical to v8 (p99.9 61 vs 53 ms, max 80 vs 76 at 40 ms); two local arena timeouts in
   ~1,000 games of the prior builds were machine stalls.
 - Parallel testing: three extra cloud sessions ran the arena on the pushed branch (create_session with

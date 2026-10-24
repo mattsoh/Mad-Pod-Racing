@@ -336,7 +336,7 @@ struct EvalParams {
   double boostBlkW = 0;
   double boostEarly = 0;
   double pathW = 0, pathR = 800;
-  double blkPriorW = 0;
+  double blkPriorW = 300;
   double valueW = 0.5;
   double (*valueFn)(const State&, const Track&, int) = nullptr;
   double runShieldW = 500;

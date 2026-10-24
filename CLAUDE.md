@@ -3,7 +3,17 @@
 C++17 bot for CodinGame's Mad Pod Racing, Legend league. Owner: mattsoh (Legend #261 with an older
 Python bot when this started). Goal: climb Legend. Read README.md for layout, tools and results.
 
-## Current state (v8 in dist/mad_pod_bot.cpp, not yet on the ladder; v7, v6, v5 kept as dist/mad_pod_bot_vN.cpp)
+## Current state (v9 in dist/mad_pod_bot.cpp, not yet on the ladder; v8 ... v5 kept as dist/mad_pod_bot_vN.cpp)
+- v9 = v8 + `blkPriorW=300`: a soft prior toward the imitation network's move for OUR BLOCKER on the plan's
+  first turn (cost 300 per unit of deviation: |rotation|/18 + 1 if the thrust kind differs). Top-15 second
+  pods mark the enemy blocker and double-team its runner 2-3x more than ours; the network imitates that,
+  while the hand-written blocker terms pull ours to a fixed post. vs v7: **70.8%** (283-117, seeds 21+37);
+  1000: 55.8% (400), 3000: 47.8% (400). On top of v8: **63.5%** (254-146, seeds 21+37). Turn-time
+  distribution identical to v8 (p99.9 61 vs 53 ms, max 80 vs 76 at 40 ms); two local arena timeouts in
+  ~1,000 games of the prior builds were machine stalls.
+- Parallel testing: three extra cloud sessions ran the arena on the pushed branch (create_session with
+  source_revision = branch name, not a SHA; the arena does not create --replays dirs: mkdir -p first).
+
 - v8 = v7 + a learned VALUE network (src/value.h, nets/value32, `valueW=0.5`): predicts the race-lead change
   over the next 30 turns from the 48 features of the whole 4-pod situation, trained on 2,501 real games
   (tools/value_data.cpp, tools/train_value.py; held-out R2 0.40 vs linear 0.23). The search adds

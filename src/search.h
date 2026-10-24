@@ -72,7 +72,8 @@ struct EvalParams {
   // deviation (|rotation| / 18 + 1 if the thrust kind differs). Top bots' second pods mark the enemy blocker
   // and double-team its runner 2-3x more than ours; the network imitates that, the hand-written blocker terms
   // pull ours back to a fixed post. 0 = off.
-  double blkPriorW = 0;
+  double blkPriorW = 300;     // v9. 0 = v8. vs v7: 70.8% (283-117, seeds 21+37); on top of v8: 63.5% (254-146);
+                               // 1000 55.8%, 3000 47.8% vs v7: the network's move is a nudge, not an order
   double valueW = 0.5;         // weight of the learned value (src/value.h) at the horizon, in checkpoints * 50000.
                                // v8. 0 = v7. vs v7 at 40 ms: 61.0% (244-156, seeds 21+37); pinned turns/game 152 -> 120,
                                // speed toward the checkpoint while pinned 12 -> 55 (top bots 47), pin p90 33 -> 21 turns

@@ -336,6 +336,9 @@ struct EvalParams {
   double boostBlkW = 0;
   double boostEarly = 0;
   double pathW = 0, pathR = 800;
+  double blkPriorW = 0;
+  double valueW = 0.5;
+  double (*valueFn)(const State&, const Track&, int) = nullptr;
   double runShieldW = 500;
   int rootBlk[2] = {1, 3};    // set each turn from the root: each team's blocker
   double snapP = 0.125;       // chance a mutation snaps to the top bots' moves (-18/0/+18 deg, thrust 0/200)
@@ -382,6 +385,8 @@ struct EvalParams {
         else if (k == "pathW") pathW = v;
         else if (k == "pathR") pathR = v;
         else if (k == "runShieldW") runShieldW = v;
+        else if (k == "valueW") valueW = v;
+        else if (k == "blkPriorW") blkPriorW = v;
         else if (k == "blockStick") blockStick = v;
         else if (k == "shieldUseW") shieldUseW = v;
         else if (k == "robustW") robustW = v;
@@ -444,6 +449,7 @@ inline double evaluate(const State& s, const Track& tr, int team, int depth, con
   double toRun = std::atan2(O.y - B.y, O.x - B.x) / DEG;
   score -= blocking * P.blockAngW * std::fabs(angleDiff(B.angle, toRun));
   score -= P.shieldW * (R.shield + 0.3 * B.shield);
+  if (P.valueW != 0 && P.valueFn) score += P.valueW * 50000 * P.valueFn(s, tr, team);
   if (P.pathW != 0) {
     double cx = tr.x[R.next], cy = tr.y[R.next], worst = 0;
     for (int e : {c, d}) worst = std::max(worst, detour(R.x, R.y, cx, cy, s.p[e].x, s.p[e].y, P.pathR));
@@ -540,11 +546,19 @@ struct Search {
   long evals = 0;
   double lastScore = 0;
   std::function<void(const State&, int, const Plan&, Plan&)> model;
+  Plan prior{};               // the network's plan for our team this turn (blkPriorW)
+  bool havePrior = false;
   double score(const State& root, const Plan& t0, const Plan& t1, int team) {
     ++evals;
     State s = root;
     const Plan& own = team == 0 ? t0 : t1;
     double cost = 0;
+    if (havePrior && team == 0) {  // our blocker's first move vs the network's
+      int j = P.rootBlk[0] & 1;
+      const Gene &g = own.g[0][j], &q = prior.g[0][j];
+      auto cls = [](const Gene& x) { return x.kind != K_THRUST ? 2 + x.kind : x.thrust >= MAX_THRUST / 2; };
+      cost += P.blkPriorW * (std::fabs(g.rot - q.rot) / MAX_ROT + (cls(g) != cls(q)));
+    }
     for (int d = 0; d < DEPTH; ++d) {
       cost += P.shieldUseW * ((own.g[d][0].kind == K_SHIELD) + (own.g[d][1].kind == K_SHIELD));
       cost += P.runShieldW * (own.g[d][(P.rootBlk[team] & 1) ^ 1].kind == K_SHIELD);
@@ -666,6 +680,8 @@ struct Search {
     else
       theirs = oppSeeds[2];  // trust the model's prediction as is
     if (model) model(root, 0, theirs, mySeeds[2]);
+    havePrior = model && P.blkPriorW > 0;
+    if (havePrior) prior = mySeeds[2];
     int myN = nSeeds;
     int run;
     bool pinned = runnerPinned(root, run);
@@ -691,53 +707,6 @@ struct Search {
 };
 }
 namespace mpr {
-constexpr int N_IN = 22;
-constexpr int N_ACT = 7;
-constexpr int N_OUT = N_ACT * N_ACT;
-inline Gene actionGene(int a) {
-  if (a == 6) return {0.f, 0, K_SHIELD};
-  return {(float)((a % 3 - 1) * MAX_ROT), (int16_t)(a < 3 ? MAX_THRUST : 0), K_THRUST};
-}
-inline void duelFeatures(const State& s, const Track& tr, int run, int blk, float* f) {
-  const Pod& R = s.p[run];
-  int c1 = R.next, c2 = c1 + 1 == tr.n ? 0 : c1 + 1, c3 = c2 + 1 == tr.n ? 0 : c2 + 1;
-  double dx = tr.x[c1] - R.x, dy = tr.y[c1] - R.y;
-  double d = std::sqrt(dx * dx + dy * dy);
-  double ux = 1, uy = 0;
-  if (d > 1e-6) ux = dx / d, uy = dy / d;
-  else ux = std::cos(R.angle * DEG), uy = std::sin(R.angle * DEG);
-  auto rx = [&](double vx, double vy) { return (float)(vx * ux + vy * uy); };
-  auto ry = [&](double vx, double vy) { return (float)(-vx * uy + vy * ux); };
-  double hc = std::cos(R.angle * DEG), hs = std::sin(R.angle * DEG);
-  f[0] = (float)(d / 10000);
-  f[1] = rx(hc, hs);
-  f[2] = ry(hc, hs);
-  f[3] = rx(R.vx, R.vy) / 1000;
-  f[4] = ry(R.vx, R.vy) / 1000;
-  f[5] = rx(tr.x[c2] - tr.x[c1], tr.y[c2] - tr.y[c1]) / 10000;
-  f[6] = ry(tr.x[c2] - tr.x[c1], tr.y[c2] - tr.y[c1]) / 10000;
-  f[7] = rx(tr.x[c3] - tr.x[c2], tr.y[c3] - tr.y[c2]) / 10000;
-  f[8] = ry(tr.x[c3] - tr.x[c2], tr.y[c3] - tr.y[c2]) / 10000;
-  f[9] = R.shield / (float)SHIELD_TURNS;
-  f[21] = s.timeout[run >> 1] / (float)TIMEOUT_TURNS;
-  if (blk < 0) {
-    for (int i = 10; i < 21; ++i) f[i] = 0;
-    return;
-  }
-  const Pod& B = s.p[blk];
-  double bc = std::cos(B.angle * DEG), bs = std::sin(B.angle * DEG);
-  f[10] = 1;
-  f[11] = rx(B.x - R.x, B.y - R.y) / 10000;
-  f[12] = ry(B.x - R.x, B.y - R.y) / 10000;
-  f[13] = rx(B.vx, B.vy) / 1000;
-  f[14] = ry(B.vx, B.vy) / 1000;
-  f[15] = rx(bc, bs);
-  f[16] = ry(bc, bs);
-  f[17] = B.shield / (float)SHIELD_TURNS;
-  f[18] = (float)(std::hypot(B.x - R.x, B.y - R.y) / 10000);
-  f[19] = rx(B.x - tr.x[c1], B.y - tr.y[c1]) / 10000;
-  f[20] = ry(B.x - tr.x[c1], B.y - tr.y[c1]) / 10000;
-}
 constexpr int N_FULL = 48;
 constexpr int F_LAST = 44;
 inline void observeLastMove(Pod& p, const Pod& prev) {
@@ -813,66 +782,6 @@ inline Gene bcGene(int rotBin, int kindBin) {
   if (kindBin == 2) return {r, 0, K_SHIELD};
   if (kindBin == 3) return {r, MAX_THRUST, K_BOOST};
   return {r, (int16_t)(kindBin ? MAX_THRUST : 0), K_THRUST};
-}
-}
-#include <algorithm>
-namespace mpr {
-constexpr int GAME_MAX = 8;
-inline float solveGame(const float* A, int m, int n, float* x, float* y, int iters = 150) {
-  int bi = 0, bj = 0;
-  float maxmin = -1e30f, minmax = 1e30f;
-  for (int i = 0; i < m; ++i) {
-    float mn = 1e30f;
-    for (int j = 0; j < n; ++j) mn = std::min(mn, A[i * n + j]);
-    if (mn > maxmin) maxmin = mn, bi = i;
-  }
-  for (int j = 0; j < n; ++j) {
-    float mx = -1e30f;
-    for (int i = 0; i < m; ++i) mx = std::max(mx, A[i * n + j]);
-    if (mx < minmax) minmax = mx, bj = j;
-  }
-  if (maxmin >= minmax - 1e-6f) {
-    std::fill(x, x + m, 0.f);
-    std::fill(y, y + n, 0.f);
-    x[bi] = 1;
-    y[bj] = 1;
-    return A[bi * n + bj];
-  }
-  float rx[GAME_MAX] = {}, ry[GAME_MAX] = {}, sx[GAME_MAX] = {}, sy[GAME_MAX] = {};
-  float cx[GAME_MAX], cy[GAME_MAX], u[GAME_MAX];
-  auto strat = [](const float* r, int k, float* out) {
-    float s = 0;
-    for (int i = 0; i < k; ++i) s += r[i];
-    for (int i = 0; i < k; ++i) out[i] = s > 0 ? r[i] / s : 1.0f / k;
-  };
-  for (int t = 1; t <= iters; ++t) {
-    strat(rx, m, cx);
-    strat(ry, n, cy);
-    float v = 0;
-    for (int i = 0; i < m; ++i) {
-      u[i] = 0;
-      for (int j = 0; j < n; ++j) u[i] += A[i * n + j] * cy[j];
-      v += cx[i] * u[i];
-    }
-    for (int i = 0; i < m; ++i) rx[i] = std::max(0.f, rx[i] + u[i] - v);
-    strat(rx, m, cx);
-    for (int i = 0; i < m; ++i) sx[i] += t * cx[i];
-    float w = 0;
-    for (int j = 0; j < n; ++j) {
-      u[j] = 0;
-      for (int i = 0; i < m; ++i) u[j] += cx[i] * A[i * n + j];
-      w += cy[j] * u[j];
-    }
-    for (int j = 0; j < n; ++j) ry[j] = std::max(0.f, ry[j] + w - u[j]);
-    strat(ry, n, cy);
-    for (int j = 0; j < n; ++j) sy[j] += t * cy[j];
-  }
-  strat(sx, m, x);
-  strat(sy, n, y);
-  float val = 0;
-  for (int i = 0; i < m; ++i)
-    for (int j = 0; j < n; ++j) val += x[i] * A[i * n + j] * y[j];
-  return val;
 }
 }
 #include <algorithm>
@@ -1420,8 +1329,7 @@ inline const MLP& botNet() {
 inline bool bcNet() {
   return (botNet().inputs() == N_FULL || botNet().inputs() == F_LAST) && botNet().outputs() == BC_OUT;
 }
-inline bool duelNet() { return botNet().inputs() == N_IN && botNet().outputs() == N_OUT; }
-inline bool nnAvailable() { return bcNet() || duelNet(); }
+inline bool nnAvailable() { return bcNet(); }
 struct NNPlayer {
   Track tr;
   explicit NNPlayer(const Track& t) : tr(t) {}
@@ -1457,33 +1365,10 @@ struct NNPlayer {
     }
     return bcGene(pickFrom(pr, BC_ROT, rng), pickFrom(pk, BC_KIND, rng));
   }
-  void duel(const State& s, int run, int blk, float* xr, float* yb) const {
-    float f[N_IN], q[N_OUT];
-    duelFeatures(s, tr, run, blk, f);
-    botNet().forward(f, q);
-    solveGame(q, N_ACT, N_ACT, xr, yb);
-  }
   void policy(const State& s, Rng* rng, Gene g[4]) const {
     if (bcNet()) {
       for (int k = 0; k < 4; ++k) g[k] = bcMove(s, k, rng);
       return;
-    }
-    int run[2], blk[2];
-    roles(s, tr, 0, run[0], blk[0]);
-    roles(s, tr, 1, run[1], blk[1]);
-    for (int t = 0; t < 2; ++t) {
-      float x[N_ACT], y[N_ACT];
-      duel(s, run[t], blk[1 - t], x, y);
-      g[run[t]] = actionGene(pickFrom(x, N_ACT, rng));
-      g[blk[1 - t]] = actionGene(pickFrom(y, N_ACT, rng));
-    }
-    for (int t = 0; t < 2; ++t) {
-      const Pod& p = s.p[run[t]];
-      Gene& gr = g[run[t]];
-      if (!boostAvailable(s, run[t]) || gr.kind != K_THRUST || gr.thrust < MAX_THRUST) continue;
-      double toCp = std::atan2(tr.y[p.next] - p.y, tr.x[p.next] - p.x) / DEG;
-      double d = dist(p.x, p.y, tr.x[p.next], tr.y[p.next]);
-      if (std::fabs(angleDiff(p.angle + gr.rot, toCp)) < 4 && d > 5000) gr.kind = K_BOOST;
     }
   }
   void act(const State& s, Rng* rng, Gene out[2]) const {
@@ -1500,12 +1385,6 @@ struct NNPlayer {
         int k = 2 * team + j;
         g[k] = bcNet() ? bcMove(s, k, nullptr) : Gene{0, MAX_THRUST, K_THRUST};
         g[k ^ 2] = other.g[d][j];
-      }
-      if (!bcNet()) {
-        Gene all[4];
-        policy(s, nullptr, all);
-        g[2 * team] = all[2 * team];
-        g[2 * team + 1] = all[2 * team + 1];
       }
       plan.g[d][0] = g[2 * team];
       plan.g[d][1] = g[2 * team + 1];
@@ -1533,6 +1412,59 @@ struct NNPlayer {
     }
   }
 };
+}
+inline const char* NN_VALUE =
+    "o&a.x126Y$03zm:03zmx00@mJjokAZ0@@r30SSxa@EK\?y@qV&$@@Af11oXV60rA5#2M+8a@R#{00rz{0}1<<(3Y*s)i%tGX@qM%20SSb\?@Sj0%F:.p\?}2go)"
+    "87#u#%nt})]8eT+1]XD6@T5q#@$2I3]p@4ZjO]cV0@&o30rJh%0F7pO%nJ6100001@qV/#0092#@RVY$00030000xe0Tn=i0n*#Fj0C4a}HOd>0SJAf1nq6I"
+    "/y4Y3@Sioh3L-7e0S-904Gh**.U@M%2mytg}%T$82&8]oji4Nj2kOS7}3DAM0qMD.)d{+/>>$R=9d^L}1mnW(0L\?X73ITS000rPh@r&5/0(tEHjawmIo=I}1"
+    "]B79M0t)GS{YyM)@RuGZeDL}<9%RcN(*<VQ&@Yl10S/S=hu$I$4$}01jOO<Q0@@r30rA93%a7sN00ic2009910@@x5009300rrf20096100JI%015@a1bIR/"
+    "je+Znm1DTh)fhP1jO5yX76:Qs8TOjA\?UcT$[alAM&]&U/6V/wg5f7-X3lF{LhFDy#jIRQa2fW2D@R)ca1QU>i2L[w$1oFS65:]L}0@Srj}zJ*ndKj/>@r.iT"
+    "%m=/&8gn85jp\?8-5cq}l0%4-Z1PGtF1{B]a@R((%@R(Y%1om#>])+{u)!E4=0TN(+@}3D<01y[8jp7#/{5Uu%0@@rk@SmVv%nJ90@%5M72)gkc0ri903ig5d"
+    "%nq#}00R()%m=o#5nGoVjC0wh8U<sk%nR/}@@A5@}Vl=$@@r301p1@c00ic00uiTa1{a#e0sn#h0Sq-)5GweIjeSIY9TRuf4GL[#E{971{=[0)@[)CM{8tEN"
+    "5^FdE(DGFU1OzQf}XR*$R0oGs+t$v}i$7=:%nJ8%0@-oc0S8FAF7+}x0%5xbbiX}50rMe\?{w>r<%nr630S@u30qWq]@v/jkjnxf^jN&:V1QK}OdC+NZ[zaxJ"
+    "{5%THP/}ry!DpqV3hcKW2mH[F@Owx8(h\?qh}@x@Dj1oW)}O-1w)Fu}V{5U}1r52u@&}roR[:(7)[8sO\?08w4zbk\?oG{5(3984b^c6<#o=jaOyDf=p.#@o\?&>"
+    "5>T.l74\?:\?)!Dn+%3)4x6zZ}O}=}Ly\?2E%0{xw!t]9BZ!e8OvajOY3T@@J90@@h]$0F7mJ2lB(90SSi12Mj-70rrl41{j-60%5u3@qV*3@riDd0qKtJjy4<^"
+    "[BuOW0rqV\?0SAn@}#cM[@@h#$0%!(c@S9u82z3aq4F*Cl0sFV6%nI^019Fp<i%Uu+}$Zv4}2QY}2lsi98Wvlc>>CnxBkfgB(h#Rf1r)QC@0-Sg@oS5n}2*f["
+    "5[k$]jP23R@@A910000b00AzZ0R(=)0ri5@P+3t\?0rEYu4g8$l@@A610rr2#0q)h%}-aJQjokG.1P!P40SSo1@%eL{ch[qO2ls&ei9uI70S*@83JQIj0rJo4"
+    "%l*c(01fn91Uu(ejo+(/}2pu{0009j@T58@0quG[%nJ65]8X)>000l5%n8V]@}#*0004MI0rr099mazPjOn^S1p>Ij@@J2$009b#0SJc0@@r300@&l30ric3"
+    "@Qbjq<n!]O00Af100Jc30o#Lkjj0%9)9^uz68Sah]YDsajX(1Q4d:$%g9dF83hVpu&V>6u*y:5z@seS93L-pC%aSPQjokJZ0rSr10rri0@SAb#(Jc!Z}#D*2"
+    "b9@I%00q8d4*91n@@Jc10RuD]0@huV@fh@[jkZqt7xBgf0rq{e{3Ag^1PXua1{1.%zY!#M3iiNy4Urf\?@Rci(0q+*T@q3oW]HP>wi%kS!{XUA@0ri2$%m=sJ"
+    "!e!k\?68IB}cvV{S]81&/{xxEP00Su20T!C%1N#V%9+vN:j01$j5eL3p0%]zl0}W-4[ezMK4/3wt(hf#-]-xTj1NKFr0tj}{0tLFh4!phg6mX#fj3BO<)Jy3y"
+    "<m96p}r4A}=(q(+0@qK64jO:S)/H60[}3Jh4/WNw@$L.p4e]kFc)-DHi$}8.!Hp!v0168R}2{EeQW4QG@qlaa67(qX@%n=[1+ex2}#Wrp1qRmP1qRQS1d7:1"
+    "j331cgcy<L6-c-c1([w9qWK-D@Qf{{>jo!$2>!Gr)$1*g4/MLJ}U/.9/C%$&>)\?2tjX*iyjUVz)j:)nXY$uU:j=/(.Z1yQyj<P%vj}Xt0jXa3<jZGs4k29wE"
+    "YDmHbY+{&Jj[1[sZbuk4jD=e3k3fdIj&)EbY&Tq3kb5zGYUvZ8Z2[ZPj.CLojN\?-TjW<r(j>do[YM/diY>aKajUs.UY@8:ij/5#6Z714djqw2w1T<k^5w##}"
+    "F=2iq]bn3{4fcWDFDMl80@8G+0pednjfZiB}VNpx4-WHbFUBcX3]3Go6.ptf[db9Q5/.#42WFZRjacHr{9HWC{c]*::{4+s<QkM^aMkLm)GLQ7jlbrr5gJAl"
+    "jF9Bv2)H!Y1{$qP5b#[c[B1)q&nI3J2<g{&{ZE9l2bQCFjf6E9(gK{Y]tH8EF+6&+2)Ofd3<VNe+]u9k4GuwR{9J=*jK9n[0}#X40UkbQ0%/Lq{x4L#\?*{v:"
+    "00O>=/av]\?@Ty)GjhRnN9$OqOeGrE&+MnBJ9]T1j1[@hqN&RIi(dt$ocV:eTjolL^{0T4[}we]09R7Lx}$R6R>&\?sq78U#w\?VA@:+.UGOjaN)g7WhR.(GXl="
+    "<}e<x4/y[D)d5@&78=e#]B}MA4pu:Dj5ulk5DZBTc:rd.pX12+0%\?Th@U^%58W)hp2>[Pj=FEFajF:c-76$mt}UpEB01*TH0SW=Y@O^Lq}Vc6X0%/+Gd-&Ko"
+    "j2Cw>78dtc1}JqpSR^ep]+Y%(@Uunk]6[pxbn[&1{Jb<ljs5SJ]:.b@3<vkY]-i8o}0yGMb7ACs3J+UWk\?N1P]*AxKj52A>]BqN^}W:an3\?%R)868xI86Y[g"
+    "0Stm=amo*.]L7u(jGxJO].5k:@R^iP%nBnp5C..1}$GmC4!w#W1Q+$H6YY#:jJOE{]xDZk1T1c:{#rQo5cJpQ@){JZ0SzML{zi(c)mh3ljiWzHljB5y8j.AN"
+    "LO2>N<qL>6{%/Sz[aDCH)\?l=J1=<HcjI.SK2(:AS}Vd0O{XMMD1RlgZ1)C<Y@U9AD)F)K-}#:(UjNRE(2)Zy%5bb>/:)YMj[c!yq\?gq{v\?3qNo\?Wo]30p)3u"
+    "jN%5>1oe0N}VD#U@Sz/!4\?ctU]NUT80sbL3&R1q>@#uNSj1[6)*-AA-a)Xmg3*()J@r$!a0-fvj]8y30dIAv7]BK/Lj4$h>\?xR*G0Q]JF2o0yk}79/Fl[/Y:"
+    "3MvkbeaJoj{$=+Hj4(Y90s[n>3<N]o>M^<G]ajUhbu$KP}%ur+0%OF})/u+6jme.:}xtpPfuS^F@rE]m}4&*B(JCSZi{[Wn(JD>n(P-B/j3MqH:@2X*iS[$r"
+    "jp@d&@S&&B1SO#dd!37K*WU75%2eHLjsIKC\?t=!(8u[v#fbkP4]B&CP0sGUl9{k6B0T]y@)qd)5j6.[Q8#{j{{u@A]5+C#8}WL*=85i\?:)I^zI1QU\?W{N&2y"
+    "j3a7878)4F2N.MQ>&iAI0rB8m6aCTe(fPSz6AOpF(v>(]jwu=u@PK:g}Vd5W)*Zl34!r0()\?L8p{Wwmx3L:fD{Jf0%jmJ^F4EaDs3!A6oVdo=(5*5a7@}tV."
+    "FF!gu}w5Jz*7tIUjt+uk&$\?E{@2(SR@qTFa<{jM/6Aw8p0RM1b68.g:{2>3vjtchO@@SH^2mZ^U1PF&e1{v*h0S<[>@q!z)8VpAW]zq8DYwFa5j=A<RY>BCW"
+    "j#ZrHkb/q(kiCwnjRDADjT+-gkaJfXYMe-Pj&m:LZj=\?aZj8zBjR#6Cj{Hm7YKsG/j^kJPYO6dNYsjppk0(Y\?Y&^<sj=s^^Yz@7Kjy=x@j*L]LY#4G)kkSl2"
+    "kcuxfY+t#qkcu.>k2q4+j{vJwjB#il:kr/G.S&Ge9*w8m:(q6RYDm[seGVIV7Gw*V6pk@fi@/lX";
+namespace mpr {
+inline const MLP& valueNet() {
+  static MLP m;
+  static bool loaded = false;
+  if (!loaded) {
+    loaded = true;
+    if (NN_VALUE[0]) dequantize(z85Decode(NN_VALUE), m);
+  }
+  return m;
+}
+inline bool valueAvailable() { return valueNet().inputs() == N_FULL && valueNet().outputs() == 1; }
+inline double valueOf(const State& s, const Track& tr, int team) {
+  int a = 2 * team, run = progress(s.p[a], tr) >= progress(s.p[a + 1], tr) ? a : a + 1;
+  float f[N_FULL], v;
+  fullFeatures(s, tr, run, f);
+  valueNet().forward(f, &v);
+  return v;
+}
 }
 using namespace mpr;
 namespace {
@@ -1570,8 +1502,8 @@ int main() {
   std::string mode = modeEnv ? modeEnv : MPR_DEFAULT_MODE;
   if (mode == "auto") mode = nnAvailable() ? "hybrid" : "search";
   if ((mode == "nn" || mode == "hybrid") && !nnAvailable()) mode = "search";
-  std::cerr << "mode " << mode << (nnAvailable() ? " (network embedded)" : " (no network)") << ", " << budget
-            << " ms per turn\n";
+  std::cerr << "mode " << mode << (nnAvailable() ? " (network embedded)" : " (no network)")
+            << (valueAvailable() ? " + value" : "") << ", " << budget << " ms per turn\n";
   Tracker tk;
   Track tr;
   std::cin >> tk.laps >> tk.n;
@@ -1587,6 +1519,7 @@ int main() {
 #endif
   if (const char* e = std::getenv("MPR_PARAMS")) S.P.parse(e);
   if (std::getenv("MPR_SHARED_BOOST")) g_sharedBoost = true;  // local experiments only
+  if (valueAvailable()) S.P.valueFn = valueOf;
   NNPlayer nn(tr);
   if (mode == "hybrid")
     S.model = [&nn](const State& s, int team, const Plan& other, Plan& p) { nn.rollout(s, team, other, p); };

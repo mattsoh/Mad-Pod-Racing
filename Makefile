@@ -34,9 +34,10 @@ $(BUILD)/cglog_states: src/engine.h tools/cglog_states.cpp | $(BUILD)
 # One self-contained file to paste into the CodinGame IDE (language: C++), with
 # the imitation network embedded (hybrid mode: it predicts the opponent and
 # seeds the search).
-WEIGHTS ?= nets/bc160_t15_weights.h
+WEIGHTS ?= nets/bcl_s_weights.h
+VALUE ?= nets/value32_weights.h
 bundle: | $(BUILD)
-	python3 tools/bundle.py src/bot.cpp dist/mad_pod_bot.cpp --weights $(WEIGHTS)
+	python3 tools/bundle.py src/bot.cpp dist/mad_pod_bot.cpp --weights $(WEIGHTS) --value $(VALUE)
 
 # The same bot without a network (pure search).
 bundle-search: | $(BUILD)

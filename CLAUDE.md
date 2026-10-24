@@ -3,7 +3,20 @@
 C++17 bot for CodinGame's Mad Pod Racing, Legend league. Owner: mattsoh (Legend #261 with an older
 Python bot when this started). Goal: climb Legend. Read README.md for layout, tools and results.
 
-## Current state (v7 in dist/mad_pod_bot.cpp, not yet on the ladder; v6 kept as dist/mad_pod_bot_v6.cpp, v5 as _v5)
+## Current state (v8 in dist/mad_pod_bot.cpp, not yet on the ladder; v7, v6, v5 kept as dist/mad_pod_bot_vN.cpp)
+- v8 = v7 + a learned VALUE network (src/value.h, nets/value32, `valueW=0.5`): predicts the race-lead change
+  over the next 30 turns from the 48 features of the whole 4-pod situation, trained on 2,501 real games
+  (tools/value_data.cpp, tools/train_value.py; held-out R2 0.40 vs linear 0.23). The search adds
+  valueW * 50000 * V at the horizon. vs v7 at 40 ms: **61.0%** (121-79 seed 21, 123-77 seed 37); valueW=1:
+  51.0% (too slow / too strong). It fixed the pin problem with no pin rules: pinned turns/game 152 -> 120,
+  speed toward the checkpoint while pinned 12 -> 55 (top-15 bots 47), pin p90 33 -> 21 turns (top 26).
+  `make bundle` (defaults WEIGHTS=nets/bcl_s_weights.h VALUE=nets/value32_weights.h) = 98.7k: the unused
+  duel-network code is left out of the bundle by @bundle-skip markers (tools/bundle.py).
+- Real-game team tactics (top-15 vs ours, ahead/level/behind): 2nd pod near the enemy blocker 19/38/20% vs
+  8/24/6%; both pods on the enemy runner 13/37/11% vs 8/23/6%; escort ~2% (rare for all); "both race when
+  ahead" is not a top-bot habit. Hand-coded versions of these failed before; the value network learns them.
+- v7 vs v6 confirmed over 800 games on 4 runs (seeds 21/37/37/53): 58.4%; + pathW=1 57.5% (600): no gain.
+
 - v7 = v6 + `runShieldW=500` (cost per SHIELD by our root runner). Why: on the ladder v6's pinned runner spent
   29% of pinned turns shielding or reloading (top-15 bots 14%; context of each shield the same, so it is the
   count). Arena vs v6 at 40 ms, seed 21: **63.0%** (126-74); pinned shield/reload 24.5% -> 9.4%, pinned

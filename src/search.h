@@ -73,7 +73,9 @@ struct EvalParams {
   // and double-team its runner 2-3x more than ours; the network imitates that, the hand-written blocker terms
   // pull ours back to a fixed post. 0 = off.
   double blkPriorW = 0;
-  double valueW = 0;           // weight of the learned value (src/value.h) at the horizon, in checkpoints * 50000
+  double valueW = 0.5;         // weight of the learned value (src/value.h) at the horizon, in checkpoints * 50000.
+                               // v8. 0 = v7. vs v7 at 40 ms: 61.0% (244-156, seeds 21+37); pinned turns/game 152 -> 120,
+                               // speed toward the checkpoint while pinned 12 -> 55 (top bots 47), pin p90 33 -> 21 turns
   double (*valueFn)(const State&, const Track&, int) = nullptr;  // set by the bot when a value network is embedded
   double runShieldW = 500;     // v7. 0 = v6. vs v6 at 40 ms: 63.0% (126-74, seed 21); pinned shield/reload 24.5% -> 9.4%      // our unused boosts are worth boostW * (1 + boostEarly * share of the race still to run)
   int rootBlk[2] = {1, 3};    // set each turn from the root: each team's blocker

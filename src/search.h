@@ -68,7 +68,7 @@ struct EvalParams {
   double pathW = 0, pathR = 800;
   // Cost per SHIELD by the pod that is our runner at the root. On the ladder v6's pinned runner spent 29% of
   // its pinned turns shielding or reloading (top-15 bots 14%), each shield costing 3 turns without thrust.
-  double runShieldW = 0;      // our unused boosts are worth boostW * (1 + boostEarly * share of the race still to run)
+  double runShieldW = 500;     // v7. 0 = v6. vs v6 at 40 ms: 63.0% (126-74, seed 21); pinned shield/reload 24.5% -> 9.4%      // our unused boosts are worth boostW * (1 + boostEarly * share of the race still to run)
   int rootBlk[2] = {1, 3};    // set each turn from the root: each team's blocker
   double snapP = 0.125;       // chance a mutation snaps to the top bots' moves (-18/0/+18 deg, thrust 0/200)
   double boostW = 2500;       // value of each BOOST still unused at the horizon (top bots save theirs; 0 lost 39% vs v1, 2000-4000 won ~80%)

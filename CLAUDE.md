@@ -3,7 +3,15 @@
 C++17 bot for CodinGame's Mad Pod Racing, Legend league. Owner: mattsoh (Legend #261 with an older
 Python bot when this started). Goal: climb Legend. Read README.md for layout, tools and results.
 
-## Current state (v6 in dist/mad_pod_bot.cpp, not yet proven on the ladder; v5 kept as dist/mad_pod_bot_v5.cpp)
+## Current state (v7 in dist/mad_pod_bot.cpp, not yet on the ladder; v6 kept as dist/mad_pod_bot_v6.cpp, v5 as _v5)
+- v7 = v6 + `runShieldW=500` (cost per SHIELD by our root runner). Why: on the ladder v6's pinned runner spent
+  29% of pinned turns shielding or reloading (top-15 bots 14%; context of each shield the same, so it is the
+  count). Arena vs v6 at 40 ms, seed 21: **63.0%** (126-74); pinned shield/reload 24.5% -> 9.4%, pinned
+  turns/game 224 -> 207. Other seeds/strengths were being run in parallel cloud sessions when v7 was cut.
+  Same round, vs v6 (200 games, seed 21): pinRobustW=0 28.5% (shield share unchanged: the network's own
+  rams drive the shields, not the heuristic worst case), pinRobustW=0.3 48%, pinNet=1 33.5% (top-bot shield
+  share, but loses), pathW=1 (runner progress along the path round enemy pods) 53.5%.
+
 - v6 = v5 + a faster engine (cast-based floor/trunc, interpolated trig table in applyMove; replays still exact)
   + network `nets/bcl_s` (44+4 inputs: each pod's last move, masked after a rollout's first step; trained by
   bc.cpp on what our bot sees: the predicted team's shields hidden, reload turns labelled thrust 0) on 1,669

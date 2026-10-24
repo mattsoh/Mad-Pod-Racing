@@ -19,15 +19,15 @@
 namespace mpr {
 constexpr double PI_D = 3.14159265358979323846;
 constexpr double DEG = PI_D / 180.0;
-constexpr int MAX_THRUST = 200;       // Legend: 0..200
+constexpr int MAX_THRUST = 200;
 constexpr int BOOST_THRUST = 650;
-constexpr double POD_RSQ = 640000.0;  // (400 + 400)^2
+constexpr double POD_RSQ = 640000.0;
 constexpr double CP_RADIUS = 600.0;
 constexpr double CP_RSQ = 360000.0;
 constexpr double FRICTION = 0.85;
 constexpr double MAX_ROT = 18.0;
 constexpr int TIMEOUT_TURNS = 100;
-constexpr int SHIELD_TURNS = 4;       // activation turn + 3 turns without thrust
+constexpr int SHIELD_TURNS = 4;
 constexpr int MAX_CP = 8;
 inline bool g_sharedBoost = false;
 enum Kind : uint8_t { K_THRUST = 0, K_SHIELD = 1, K_BOOST = 2 };
@@ -38,22 +38,22 @@ struct Track {
 };
 struct Pod {
   double x, y, vx, vy;
-  double angle;    // degrees in [0, 360)
-  double rad;      // the same heading kept in radians the way the referee keeps it
-  int next;        // index of the next checkpoint
-  int passed;      // checkpoints passed so far
-  int shield;      // >0: no thrust this turn; ==4: shield active (mass x10)
-  bool boostUsed;  // this pod has fired BOOST
-  float lastRot, lastThrust;  // thrust 0 when unknown
-  bool lastTouch;             // the speed change does not fit a move of its own: the pod touched another
-  bool lastMasked;            // set by every simulated move: rollouts do not feed the network its own guesses
+  double angle;
+  double rad;
+  int next;
+  int passed;
+  int shield;
+  bool boostUsed;
+  float lastRot, lastThrust;
+  bool lastTouch;
+  bool lastMasked;
 };
 struct State {
-  Pod p[4];               // 0,1 = team 0; 2,3 = team 1
-  int timeout[2];         // turns left before the team times out
+  Pod p[4];
+  int timeout[2];
   bool teamBoostUsed[2];
   int turn;
-  int winner;             // -1 while running, else 0 or 1
+  int winner;
 };
 inline double normAngle(double a) {
   while (a >= 360.0) a -= 360.0;
@@ -120,15 +120,15 @@ inline void applyMove(State& s, int i, double rot, int thrust, int kind) {
 inline void applyCommand(State& s, int i, double tx, double ty, int thrust, int kind, bool firstTurn) {
   int t = resolveThrust(s, i, thrust, kind);
   Pod& p = s.p[i];
-  if (tx == p.x && ty == p.y) return;  // the referee skips rotation and thrust
-  if (std::fabs(angleDiff(p.angle, p.rad / DEG)) > 1e-6) p.rad = p.angle * DEG;  // angle was set from outside
+  if (tx == p.x && ty == p.y) return;
+  if (std::fabs(angleDiff(p.angle, p.rad / DEG)) > 1e-6) p.rad = p.angle * DEG;
   double a = std::atan2(ty - p.y, tx - p.x);
   constexpr double maxRot = MAX_ROT * DEG, twoPi = 2 * PI_D;
   if (firstTurn) {
     p.rad = a;
   } else {
     double da = std::fmod(a - p.rad, twoPi);
-    double d = std::fmod(2 * da, twoPi) - da;  // wrapped to (-pi, pi]
+    double d = std::fmod(2 * da, twoPi) - da;
     if (d > maxRot) p.rad += maxRot;
     else if (d < -maxRot) p.rad -= maxRot;
     else p.rad = a;
@@ -156,7 +156,7 @@ inline void bounce(Pod& a, Pod& b) {
   nx /= dd;
   ny /= dd;
   double rvx = a.vx - b.vx, rvy = a.vy - b.vy;
-  double m1 = a.shield == SHIELD_TURNS ? 0.1 : 1.0;  // inverse masses
+  double m1 = a.shield == SHIELD_TURNS ? 0.1 : 1.0;
   double m2 = b.shield == SHIELD_TURNS ? 0.1 : 1.0;
   double force = (nx * rvx + ny * rvy) / (m1 + m2);
   if (force < 120.0) force += 120.0;
@@ -166,7 +166,7 @@ inline void bounce(Pod& a, Pod& b) {
   a.vy += iy * m1;
   b.vx -= ix * m2;
   b.vy -= iy * m2;
-  if (dd <= 800.0) {  // push overlapping pods apart
+  if (dd <= 800.0) {
     double e = -(dd - 800.0) / 2 + 0.00001;
     a.x -= nx * e;
     a.y -= ny * e;
@@ -197,7 +197,7 @@ inline void checkCheckpoint(State& s, const Track& tr, int i, double x0, double 
   if (p.passed >= tr.total()) return;
   if (segmentHitsCp(x0, y0, p.x, p.y, tr.x[p.next], tr.y[p.next])) {
     p.passed++;
-    if (p.passed < tr.total()) p.next = p.next + 1 == tr.n ? 0 : p.next + 1;  // a finished pod stays on its last checkpoint
+    if (p.passed < tr.total()) p.next = p.next + 1 == tr.n ? 0 : p.next + 1;
     s.timeout[i >> 1] = TIMEOUT_TURNS;
   }
 }
@@ -271,7 +271,7 @@ inline double progress(const Pod& q, const Track& tr) {
   double dx = tr.x[q.next] - q.x, dy = tr.y[q.next] - q.y;
   return q.passed * 50000.0 - std::sqrt(dx * dx + dy * dy);
 }
-}  // namespace mpr
+}
 #include <cmath>
 #include <chrono>
 #include <cmath>
@@ -293,7 +293,7 @@ struct Rng {
   double uniform() { return (next() >> 11) * (1.0 / 9007199254740992.0); }
   double range(double a, double b) { return a + (b - a) * uniform(); }
 };
-}  // namespace mpr
+}
 namespace mpr {
 #ifndef MPR_DEPTH
 #define MPR_DEPTH 6
@@ -304,9 +304,9 @@ namespace mpr {
 constexpr int DEPTH = MPR_DEPTH;
 constexpr int POP = MPR_POP;
 struct Gene {
-  float rot;       // degrees, -18..18
-  int16_t thrust;  // 0..200
-  uint8_t kind;    // K_THRUST, K_SHIELD, K_BOOST
+  float rot;
+  int16_t thrust;
+  uint8_t kind;
 };
 struct Plan {
   Gene g[DEPTH][2];
@@ -318,31 +318,36 @@ struct Timer {
   }
 };
 struct EvalParams {
-  double angleW = 4.0;        // runner: per degree off its next checkpoint
-  double blockDistW = 1.2;    // blocker: per unit from its intercept point (0.6 let it dawdle: real losses show it 2-8k away)
-  double blockAngW = 3.0;     // blocker: per degree off facing the enemy runner
+  double angleW = 4.0;
+  double blockDistW = 1.2;
+  double blockAngW = 3.0;
   double timeoutW = 2500.0;   // per turn a team's timeout falls below 25
-  double shieldW = 300.0;     // per thrustless shield turn still owed at the horizon
-  double speedW = 0.0;        // runner: per unit of speed toward its next checkpoint
+  double shieldW = 300.0;
+  double speedW = 0.0;
   double oppShare = 0.3;      // share of the turn spent evolving the opponent's plan (0 = trust the model)
   double rescueSpeed = 450;   // blocker's assumed average speed on the way to its own checkpoint
-  double rescueTurn = 10;     // turns allowed for turning round and getting up to speed (15 was 55.5% vs 10 on top of robustW)
-  double rescueSlack = 10;    // rescue ramps up over the last `rescueSlack` turns of slack and is full at zero slack
+  double rescueTurn = 10;
+  double rescueSlack = 10;
   double rescueW = 3.0;       // per unit of the blocker's distance to its own checkpoint, at full rescue
-  double rescueAngW = 6.0;    // per degree the blocker is off heading for it
+  double rescueAngW = 6.0;
   double rescueSpeedW = 3.0;  // per unit of the blocker's speed toward it
-  double rescueLead = 10;     // no rescue while our clock leads theirs by more than this (in a mutual pin, whoever breaks off first loses the race; 0 = off)
+  double rescueLead = 10;
   double rescueOf[2] = {0, 0};  // set each turn from the root: how urgently each team's blocker must go (0..1)
+  double boostBlkW = 0;
+  double boostEarly = 0;
+  double pathW = 0, pathR = 800;
+  double runShieldW = 500;
+  int rootBlk[2] = {1, 3};    // set each turn from the root: each team's blocker
   double snapP = 0.125;       // chance a mutation snaps to the top bots' moves (-18/0/+18 deg, thrust 0/200)
-  double boostW = 2500;       // value of each BOOST still unused at the horizon (top bots save theirs; 0 lost 39% vs v1, 2000-4000 won ~80%)
-  double blockOff = 1000;     // blocker: waits this far in front of the checkpoint, toward the enemy runner (top bots: 700-1100)
-  double blockLead = 1e9;     // ... but never more than this far ahead of the runner on its line to the checkpoint: top bots shadow the runner ~2,500 ahead instead of commuting to the checkpoint (1e9 = v5 behaviour)
+  double boostW = 2500;
+  double blockOff = 1000;
+  double blockLead = 1e9;
   double blockStick = 3000;   // blocker: keeps defending the runner's next checkpoint unless the runner is this much closer to it (1500 in v4; 3000 = 57.5% vs it)
-  double shieldUseW = 0;      // flat cost per SHIELD in our plan (top bots shield 1-7 times per 100 pod-turns; we did 6-10)
+  double shieldUseW = 0;
   double robustW = 1;         // weight of a plan's downside against a second (heuristic) opponent prediction (0 = off, 1 = worst case); doubles the cost of an evaluation. 1: 76% vs v4; 0.5: 71%; 2: 60%
   double reactShare = 0.3;    // share of the turn spent re-evolving our plan against the network's answer to it (0 = off)
   double pinNet = 0;          // pinned runner (an enemy between it and its checkpoint): play the imitation network's moves.
-  double pinRobustW = -1;     // robustW to use while our runner is pinned (-1 = robustW): the heuristic second opinion
+  double pinRobustW = -1;
   // "angleW=4,shieldW=300" style overrides (MPR_PARAMS), for local tuning.
   void parse(const char* spec) {
     std::string str = spec;
@@ -372,6 +377,11 @@ struct EvalParams {
         else if (k == "boostW") boostW = v;
         else if (k == "blockOff") blockOff = v;
         else if (k == "blockLead") blockLead = v;
+        else if (k == "boostBlkW") boostBlkW = v;
+        else if (k == "boostEarly") boostEarly = v;
+        else if (k == "pathW") pathW = v;
+        else if (k == "pathR") pathR = v;
+        else if (k == "runShieldW") runShieldW = v;
         else if (k == "blockStick") blockStick = v;
         else if (k == "shieldUseW") shieldUseW = v;
         else if (k == "robustW") robustW = v;
@@ -385,10 +395,19 @@ struct EvalParams {
   }
 };
 inline double dist(double ax, double ay, double bx, double by) { return std::hypot(ax - bx, ay - by); }
+inline double detour(double rx, double ry, double cx, double cy, double bx, double by, double r) {
+  double dR = dist(rx, ry, bx, by), dC = dist(cx, cy, bx, by);
+  if (dC <= r) return 0;
+  dR = std::max(dR, r + 1e-3);
+  double cosT = ((rx - bx) * (cx - bx) + (ry - by) * (cy - by)) / (dR * dC);
+  double arc = std::acos(std::max(-1.0, std::min(1.0, cosT))) - std::acos(r / dR) - std::acos(r / dC);
+  if (arc <= 0) return 0;
+  return std::sqrt(dR * dR - r * r) + std::sqrt(dC * dC - r * r) + r * arc - dist(rx, ry, cx, cy);
+}
 inline void applyGene(State& s, int i, const Gene& g) { applyMove(s, i, g.rot, g.thrust, g.kind); }
 inline double evaluate(const State& s, const Track& tr, int team, int depth, const EvalParams& P) {
   if (s.winner >= 0) {
-    double v = 1e9 - depth * 1e7;  // a win sooner beats a win later
+    double v = 1e9 - depth * 1e7;
     return s.winner == team ? v : -v;
   }
   int a = 2 * team, b = a + 1, c = 2 - 2 * team, d = c + 1;
@@ -425,14 +444,21 @@ inline double evaluate(const State& s, const Track& tr, int team, int depth, con
   double toRun = std::atan2(O.y - B.y, O.x - B.x) / DEG;
   score -= blocking * P.blockAngW * std::fabs(angleDiff(B.angle, toRun));
   score -= P.shieldW * (R.shield + 0.3 * B.shield);
+  if (P.pathW != 0) {
+    double cx = tr.x[R.next], cy = tr.y[R.next], worst = 0;
+    for (int e : {c, d}) worst = std::max(worst, detour(R.x, R.y, cx, cy, s.p[e].x, s.p[e].y, P.pathR));
+    score -= P.pathW * worst;
+  }
   if (P.boostW != 0) {
     if (g_sharedBoost) {
       score += P.boostW * ((s.teamBoostUsed[team] ? 0 : 1) - (s.teamBoostUsed[1 - team] ? 0 : 1));
     } else {
-      score += P.boostW * ((s.p[a].boostUsed ? 0 : 1) + (s.p[b].boostUsed ? 0 : 1));
+      double left = 1.0 - std::max(s.p[a].passed, s.p[b].passed) / (double)tr.total();
+      score += P.boostW * (1 + P.boostEarly * left) * ((s.p[a].boostUsed ? 0 : 1) + (s.p[b].boostUsed ? 0 : 1));
       score -= P.boostW * ((s.p[c].boostUsed ? 0 : 1) + (s.p[d].boostUsed ? 0 : 1));
     }
   }
+  if (P.boostBlkW != 0 && !s.p[P.rootBlk[team]].boostUsed) score += P.boostBlkW;
   score -= P.timeoutW * std::max(0, 25 - s.timeout[team]);
   score += P.timeoutW * std::max(0, 25 - s.timeout[1 - team]);
   return score;
@@ -492,14 +518,14 @@ struct Search {
   Rng rng{12345};
   Plan mine{}, theirs{};
   bool haveMine = false, haveTheirs = false;
-  const Plan* alt = nullptr;   // second opponent prediction while evolving our plan (robustW > 0)
+  const Plan* alt = nullptr;
   double scoreRobust(const State& root, const Plan& cand, int team, const Plan& other) {
     double s1 = team == 0 ? score(root, cand, other, 0) : score(root, other, cand, 1);
     if (!alt) return s1;
     double s2 = team == 0 ? score(root, cand, *alt, 0) : score(root, *alt, cand, 1);
     return s1 + robW * std::min(0.0, s2 - s1);
   }
-  double robW = 0;  // robustW in force this turn
+  double robW = 0;
   bool runnerPinned(const State& root, int& run) const {
     int blk;
     roles(root, tr, 0, run, blk);
@@ -521,6 +547,7 @@ struct Search {
     double cost = 0;
     for (int d = 0; d < DEPTH; ++d) {
       cost += P.shieldUseW * ((own.g[d][0].kind == K_SHIELD) + (own.g[d][1].kind == K_SHIELD));
+      cost += P.runShieldW * (own.g[d][(P.rootBlk[team] & 1) ^ 1].kind == K_SHIELD);
       applyGene(s, 0, t0.g[d][0]);
       applyGene(s, 1, t0.g[d][1]);
       applyGene(s, 2, t1.g[d][0]);
@@ -619,6 +646,7 @@ struct Search {
     for (int t = 0; t < 2; ++t) {
       int run, blk;
       roles(root, tr, t, run, blk);
+      P.rootBlk[t] = blk;
       const Pod& B = root.p[blk];
       double need = dist(B.x, B.y, tr.x[B.next], tr.y[B.next]) / P.rescueSpeed + P.rescueTurn;
       P.rescueOf[t] = std::max(0.0, std::min(1.0, (P.rescueSlack - (root.timeout[t] - need)) / P.rescueSlack));
@@ -630,7 +658,7 @@ struct Search {
     Plan oppSeeds[3] = {opPrev, h1}, mySeeds[5] = {myPrev, h0};
     int nSeeds = 2;
     if (model) {
-      model(root, 1, myPrev, oppSeeds[2]);  // the opponent, reacting to what we plan to do
+      model(root, 1, myPrev, oppSeeds[2]);
       nSeeds = 3;
     }
     if (oppShare > 0 || !model)
@@ -642,10 +670,10 @@ struct Search {
     int run;
     bool pinned = runnerPinned(root, run);
     robW = pinned && P.pinRobustW >= 0 ? P.pinRobustW : P.robustW;
-    alt = robW > 0 && model ? &h1 : nullptr;  // the heuristic opponent as the second opinion
+    alt = robW > 0 && model ? &h1 : nullptr;
     bool react = model && P.reactShare > 0;
     mine = evolve(root, 0, theirs, mySeeds, myN, clk, clk.ms(), react ? budgetMs * (1 - P.reactShare) : budgetMs);
-    if (react) {  // predict their answer to the plan we found, then improve ours against that
+    if (react) {
       model(root, 1, mine, theirs);
       Plan seeds2[2] = {mine, mine};
       model(root, 0, theirs, seeds2[1]);
@@ -661,11 +689,11 @@ struct Search {
     return mine;
   }
 };
-}  // namespace mpr
+}
 namespace mpr {
 constexpr int N_IN = 22;
-constexpr int N_ACT = 7;                 // per pod
-constexpr int N_OUT = N_ACT * N_ACT;     // Q[runner action][blocker action]
+constexpr int N_ACT = 7;
+constexpr int N_OUT = N_ACT * N_ACT;
 inline Gene actionGene(int a) {
   if (a == 6) return {0.f, 0, K_SHIELD};
   return {(float)((a % 3 - 1) * MAX_ROT), (int16_t)(a < 3 ? MAX_THRUST : 0), K_THRUST};
@@ -711,7 +739,7 @@ inline void duelFeatures(const State& s, const Track& tr, int run, int blk, floa
   f[20] = ry(B.x - tr.x[c1], B.y - tr.y[c1]) / 10000;
 }
 constexpr int N_FULL = 48;
-constexpr int F_LAST = 44;  // last-move inputs: rotation, thrust, touched, masked
+constexpr int F_LAST = 44;
 inline void observeLastMove(Pod& p, const Pod& prev) {
   double c = std::cos(p.angle * DEG), sn = std::sin(p.angle * DEG);
   double ax = p.vx / FRICTION - prev.vx, ay = p.vy / FRICTION - prev.vy;
@@ -786,7 +814,7 @@ inline Gene bcGene(int rotBin, int kindBin) {
   if (kindBin == 3) return {r, MAX_THRUST, K_BOOST};
   return {r, (int16_t)(kindBin ? MAX_THRUST : 0), K_THRUST};
 }
-}  // namespace mpr
+}
 #include <algorithm>
 namespace mpr {
 constexpr int GAME_MAX = 8;
@@ -846,7 +874,7 @@ inline float solveGame(const float* A, int m, int n, float* x, float* y, int ite
     for (int j = 0; j < n; ++j) val += x[i] * A[i * n + j] * y[j];
   return val;
 }
-}  // namespace mpr
+}
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -856,7 +884,7 @@ inline float solveGame(const float* A, int m, int n, float* x, float* y, int ite
 namespace mpr {
 struct Dense {
   int in = 0, out = 0;
-  std::vector<float> W, b;  // W[o * in + i]
+  std::vector<float> W, b;
 };
 inline float leaky(float v) { return v > 0 ? v : 0.01f * v; }
 struct MLP {
@@ -876,7 +904,7 @@ struct MLP {
       d.out = sizes[k + 1];
       d.W.resize((size_t)d.in * d.out);
       d.b.assign(d.out, 0.f);
-      double lim = std::sqrt(6.0 / d.in);  // He-uniform
+      double lim = std::sqrt(6.0 / d.in);
       for (auto& w : d.W) w = (float)(rnd() * lim);
       L.push_back(d);
     }
@@ -990,7 +1018,7 @@ inline std::string z85Decode(const char* s) {
   }
   return out;
 }
-}  // namespace mpr
+}
 inline const char* NN_WEIGHTS =
     "o&a.x126.F0h6s+0h6q%0a90ujsIVF<l3Bk2ljPC@]:E-1o!]c%nS5/2lj8%4fVO16hs52}T:HW0RuN3@S0Gh53<QKjo>Pw0jhX90009g%nJ92}#M&$0095@"
     "0%wP6@@A31%iVt@km4.#00Jl20rila1>fKWj]TZz3<3zd@@z/(0r&l41oFM50qMP%0qVS}0SJo7@^<za@SAl30q#{00rii81BnV}jP4e>FJs5n0SI]K3Kl!S"
@@ -1420,7 +1448,7 @@ struct NNPlayer {
     softmax(q, BC_ROT, pr);
     softmax(q + BC_ROT, BC_KIND, pk);
     if (!boostAvailable(s, k)) {
-      pk[1] += pk[3];  // BOOST unavailable means full thrust
+      pk[1] += pk[3];
       pk[3] = 0;
     }
     if (probs) {
@@ -1505,14 +1533,14 @@ struct NNPlayer {
     }
   }
 };
-}  // namespace mpr
+}
 using namespace mpr;
 namespace {
 struct Tracker {
   int laps = 3, n = 0, turn = 0;
   int prevNext[4] = {}, passed[4] = {};
   int timeout[2] = {TIMEOUT_TURNS, TIMEOUT_TURNS};
-  int myShield[2] = {};                 // shield value at the start of the turn
+  int myShield[2] = {};
   bool podBoost[4] = {}, teamBoost[2] = {};
   State prev{};
 };
@@ -1529,7 +1557,7 @@ struct Prediction {
   int k = 0;
   Pod p{};
 };
-}  // namespace
+}
 int main() {
   std::ios::sync_with_stdio(false);
   std::cin.tie(nullptr);
@@ -1554,7 +1582,7 @@ int main() {
   S.tr = tr;
   S.rng = Rng(1234567 + (uint64_t)tr.x[0] * 31 + (uint64_t)tr.y[1]);
   if (mode == "hybrid") S.P.oppShare = bcNet() ? 0.0 : 0.1;
-#ifdef MPR_PARAMS_BAKED  // variant builds for CodinGame test games, which have no environment
+#ifdef MPR_PARAMS_BAKED
   S.P.parse(MPR_PARAMS_BAKED);
 #endif
   if (const char* e = std::getenv("MPR_PARAMS")) S.P.parse(e);

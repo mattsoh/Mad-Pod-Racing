@@ -21,6 +21,7 @@
 #include "engine.h"
 #include "nnbot.h"
 #include "search.h"
+#include "value.h"
 
 using namespace mpr;
 
@@ -92,6 +93,7 @@ int main() {
 #endif
   if (const char* e = std::getenv("MPR_PARAMS")) S.P.parse(e);
   if (std::getenv("MPR_SHARED_BOOST")) g_sharedBoost = true;  // local experiments only
+  if (valueAvailable()) S.P.valueFn = valueOf;
   NNPlayer nn(tr);
   if (mode == "hybrid")
     S.model = [&nn](const State& s, int team, const Plan& other, Plan& p) { nn.rollout(s, team, other, p); };

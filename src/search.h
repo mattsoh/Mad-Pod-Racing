@@ -68,6 +68,13 @@ struct EvalParams {
   double pathW = 0, pathR = 800;
   // Cost per SHIELD by the pod that is our runner at the root. On the ladder v6's pinned runner spent 29% of
   // its pinned turns shielding or reloading (top-15 bots 14%), each shield costing 3 turns without thrust.
+  // Soft prior toward the imitation network's move for our blocker (first turn of the plan): cost per unit of
+  // deviation (|rotation| / 18 + 1 if the thrust kind differs). Top bots' second pods mark the enemy blocker
+  // and double-team its runner 2-3x more than ours; the network imitates that, the hand-written blocker terms
+  // pull ours back to a fixed post. 0 = off.
+  double blkPriorW = 0;
+  double valueW = 0;           // weight of the learned value (src/value.h) at the horizon, in checkpoints * 50000
+  double (*valueFn)(const State&, const Track&, int) = nullptr;  // set by the bot when a value network is embedded
   double runShieldW = 500;     // v7. 0 = v6. vs v6 at 40 ms: 63.0% (126-74, seed 21); pinned shield/reload 24.5% -> 9.4%      // our unused boosts are worth boostW * (1 + boostEarly * share of the race still to run)
   int rootBlk[2] = {1, 3};    // set each turn from the root: each team's blocker
   double snapP = 0.125;       // chance a mutation snaps to the top bots' moves (-18/0/+18 deg, thrust 0/200)
@@ -118,6 +125,8 @@ struct EvalParams {
         else if (k == "pathW") pathW = v;
         else if (k == "pathR") pathR = v;
         else if (k == "runShieldW") runShieldW = v;
+        else if (k == "valueW") valueW = v;
+        else if (k == "blkPriorW") blkPriorW = v;
         else if (k == "blockStick") blockStick = v;
         else if (k == "shieldUseW") shieldUseW = v;
         else if (k == "robustW") robustW = v;
@@ -210,6 +219,7 @@ inline double evaluate(const State& s, const Track& tr, int team, int depth, con
   score -= blocking * P.blockAngW * std::fabs(angleDiff(B.angle, toRun));
 
   score -= P.shieldW * (R.shield + 0.3 * B.shield);
+  if (P.valueW != 0 && P.valueFn) score += P.valueW * 50000 * P.valueFn(s, tr, team);
   if (P.pathW != 0) {
     double cx = tr.x[R.next], cy = tr.y[R.next], worst = 0;
     for (int e : {c, d}) worst = std::max(worst, detour(R.x, R.y, cx, cy, s.p[e].x, s.p[e].y, P.pathR));
@@ -326,11 +336,19 @@ struct Search {
   // and to seed our own search.
   std::function<void(const State&, int, const Plan&, Plan&)> model;
 
+  Plan prior{};               // the network's plan for our team this turn (blkPriorW)
+  bool havePrior = false;
   double score(const State& root, const Plan& t0, const Plan& t1, int team) {
     ++evals;
     State s = root;
     const Plan& own = team == 0 ? t0 : t1;
     double cost = 0;
+    if (havePrior && team == 0) {  // our blocker's first move vs the network's
+      int j = P.rootBlk[0] & 1;
+      const Gene &g = own.g[0][j], &q = prior.g[0][j];
+      auto cls = [](const Gene& x) { return x.kind != K_THRUST ? 2 + x.kind : x.thrust >= MAX_THRUST / 2; };
+      cost += P.blkPriorW * (std::fabs(g.rot - q.rot) / MAX_ROT + (cls(g) != cls(q)));
+    }
     for (int d = 0; d < DEPTH; ++d) {
       cost += P.shieldUseW * ((own.g[d][0].kind == K_SHIELD) + (own.g[d][1].kind == K_SHIELD));
       cost += P.runShieldW * (own.g[d][(P.rootBlk[team] & 1) ^ 1].kind == K_SHIELD);
@@ -462,6 +480,8 @@ struct Search {
     else
       theirs = oppSeeds[2];  // trust the model's prediction as is
     if (model) model(root, 0, theirs, mySeeds[2]);
+    havePrior = model && P.blkPriorW > 0;
+    if (havePrior) prior = mySeeds[2];
     int myN = nSeeds;
     int run;
     bool pinned = runnerPinned(root, run);

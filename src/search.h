@@ -61,7 +61,14 @@ struct EvalParams {
   // their boosts with the runner, 74% after turn 60 (to break pins and sprint); v5/v6 fired 55% with the
   // blocker and over half in the first 20 turns, then had none left for pins (0.1% of pinned turns vs 3.3%).
   double boostBlkW = 0;
-  double boostEarly = 0;      // our unused boosts are worth boostW * (1 + boostEarly * share of the race still to run)
+  double boostEarly = 0;
+  // Our runner's progress measured along the shortest path round the enemy pods (radius pathR) instead of in a
+  // straight line: weight of the detour they force (0 = off). Whichever of our pods clears the line scores,
+  // so the blocker knocks a pinning pod aside only when that frees the runner within the horizon.
+  double pathW = 0, pathR = 800;
+  // Cost per SHIELD by the pod that is our runner at the root. On the ladder v6's pinned runner spent 29% of
+  // its pinned turns shielding or reloading (top-15 bots 14%), each shield costing 3 turns without thrust.
+  double runShieldW = 0;      // our unused boosts are worth boostW * (1 + boostEarly * share of the race still to run)
   int rootBlk[2] = {1, 3};    // set each turn from the root: each team's blocker
   double snapP = 0.125;       // chance a mutation snaps to the top bots' moves (-18/0/+18 deg, thrust 0/200)
   double boostW = 2500;       // value of each BOOST still unused at the horizon (top bots save theirs; 0 lost 39% vs v1, 2000-4000 won ~80%)
@@ -108,6 +115,9 @@ struct EvalParams {
         else if (k == "blockLead") blockLead = v;
         else if (k == "boostBlkW") boostBlkW = v;
         else if (k == "boostEarly") boostEarly = v;
+        else if (k == "pathW") pathW = v;
+        else if (k == "pathR") pathR = v;
+        else if (k == "runShieldW") runShieldW = v;
         else if (k == "blockStick") blockStick = v;
         else if (k == "shieldUseW") shieldUseW = v;
         else if (k == "robustW") robustW = v;
@@ -122,6 +132,18 @@ struct EvalParams {
 };
 
 inline double dist(double ax, double ay, double bx, double by) { return std::hypot(ax - bx, ay - by); }
+
+// Extra length of the shortest path from (rx, ry) to (cx, cy) that goes round a disc of radius r at (bx, by),
+// over the straight line (0 when the line is clear or the disc covers the target).
+inline double detour(double rx, double ry, double cx, double cy, double bx, double by, double r) {
+  double dR = dist(rx, ry, bx, by), dC = dist(cx, cy, bx, by);
+  if (dC <= r) return 0;
+  dR = std::max(dR, r + 1e-3);
+  double cosT = ((rx - bx) * (cx - bx) + (ry - by) * (cy - by)) / (dR * dC);
+  double arc = std::acos(std::max(-1.0, std::min(1.0, cosT))) - std::acos(r / dR) - std::acos(r / dC);
+  if (arc <= 0) return 0;
+  return std::sqrt(dR * dR - r * r) + std::sqrt(dC * dC - r * r) + r * arc - dist(rx, ry, cx, cy);
+}
 
 inline void applyGene(State& s, int i, const Gene& g) { applyMove(s, i, g.rot, g.thrust, g.kind); }
 
@@ -188,6 +210,11 @@ inline double evaluate(const State& s, const Track& tr, int team, int depth, con
   score -= blocking * P.blockAngW * std::fabs(angleDiff(B.angle, toRun));
 
   score -= P.shieldW * (R.shield + 0.3 * B.shield);
+  if (P.pathW != 0) {
+    double cx = tr.x[R.next], cy = tr.y[R.next], worst = 0;
+    for (int e : {c, d}) worst = std::max(worst, detour(R.x, R.y, cx, cy, s.p[e].x, s.p[e].y, P.pathR));
+    score -= P.pathW * worst;
+  }
   if (P.boostW != 0) {
     if (g_sharedBoost) {
       score += P.boostW * ((s.teamBoostUsed[team] ? 0 : 1) - (s.teamBoostUsed[1 - team] ? 0 : 1));
@@ -306,6 +333,7 @@ struct Search {
     double cost = 0;
     for (int d = 0; d < DEPTH; ++d) {
       cost += P.shieldUseW * ((own.g[d][0].kind == K_SHIELD) + (own.g[d][1].kind == K_SHIELD));
+      cost += P.runShieldW * (own.g[d][(P.rootBlk[team] & 1) ^ 1].kind == K_SHIELD);
       applyGene(s, 0, t0.g[d][0]);
       applyGene(s, 1, t0.g[d][1]);
       applyGene(s, 2, t1.g[d][0]);

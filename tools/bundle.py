@@ -25,7 +25,20 @@ def inline(path, seen, weights, value=None):
         return []
     seen.add(path)
     out = []
+    skipping = False
     for line in open(path, encoding="utf-8"):
+        s = line.strip()
+        # Code the submitted bot never runs (e.g. the old duel network) is marked and left out of the bundle.
+        if s.startswith("// @bundle-skip-begin"):
+            skipping = True
+            continue
+        if s.startswith("// @bundle-skip-end"):
+            skipping = False
+            continue
+        if skipping:
+            continue
+        if s.startswith("// @bundle-only "):
+            line = line.replace("// @bundle-only ", "", 1)
         m = INCLUDE.match(line)
         if m:
             out += inline(os.path.join(os.path.dirname(path), m.group(1)), seen, weights, value)

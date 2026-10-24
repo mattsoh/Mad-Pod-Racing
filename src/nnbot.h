@@ -8,7 +8,9 @@
 //    solved as a matrix game each turn.
 #pragma once
 #include "features.h"
+// @bundle-skip-begin
 #include "nash.h"
+// @bundle-skip-end
 #include "nn.h"
 #include "search.h"
 #include "weights.h"
@@ -28,8 +30,11 @@ inline const MLP& botNet() {
 inline bool bcNet() {
   return (botNet().inputs() == N_FULL || botNet().inputs() == F_LAST) && botNet().outputs() == BC_OUT;
 }
+// @bundle-skip-begin
 inline bool duelNet() { return botNet().inputs() == N_IN && botNet().outputs() == N_OUT; }
 inline bool nnAvailable() { return bcNet() || duelNet(); }
+// @bundle-skip-end
+// @bundle-only inline bool nnAvailable() { return bcNet(); }
 
 struct NNPlayer {
   Track tr;
@@ -71,12 +76,14 @@ struct NNPlayer {
     return bcGene(pickFrom(pr, BC_ROT, rng), pickFrom(pk, BC_KIND, rng));
   }
 
+  // @bundle-skip-begin
   void duel(const State& s, int run, int blk, float* xr, float* yb) const {
     float f[N_IN], q[N_OUT];
     duelFeatures(s, tr, run, blk, f);
     botNet().forward(f, q);
     solveGame(q, N_ACT, N_ACT, xr, yb);
   }
+  // @bundle-skip-end
 
   // Moves for all four pods. Greedy when rng is null, sampled otherwise.
   void policy(const State& s, Rng* rng, Gene g[4]) const {
@@ -84,6 +91,7 @@ struct NNPlayer {
       for (int k = 0; k < 4; ++k) g[k] = bcMove(s, k, rng);
       return;
     }
+    // @bundle-skip-begin
     int run[2], blk[2];
     roles(s, tr, 0, run[0], blk[0]);
     roles(s, tr, 1, run[1], blk[1]);
@@ -102,6 +110,7 @@ struct NNPlayer {
       double d = dist(p.x, p.y, tr.x[p.next], tr.y[p.next]);
       if (std::fabs(angleDiff(p.angle + gr.rot, toCp)) < 4 && d > 5000) gr.kind = K_BOOST;
     }
+    // @bundle-skip-end
   }
 
   void act(const State& s, Rng* rng, Gene out[2]) const {
@@ -122,12 +131,14 @@ struct NNPlayer {
         g[k] = bcNet() ? bcMove(s, k, nullptr) : Gene{0, MAX_THRUST, K_THRUST};
         g[k ^ 2] = other.g[d][j];
       }
+      // @bundle-skip-begin
       if (!bcNet()) {
         Gene all[4];
         policy(s, nullptr, all);
         g[2 * team] = all[2 * team];
         g[2 * team + 1] = all[2 * team + 1];
       }
+      // @bundle-skip-end
       plan.g[d][0] = g[2 * team];
       plan.g[d][1] = g[2 * team + 1];
       for (int k = 0; k < 4; ++k) applyGene(s, k, g[k]);

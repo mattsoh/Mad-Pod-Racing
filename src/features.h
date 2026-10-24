@@ -11,6 +11,7 @@
 
 namespace mpr {
 
+// @bundle-skip-begin (duel network of tools/train.cpp: not used by the submitted bot)
 constexpr int N_IN = 22;
 constexpr int N_ACT = 7;                 // per pod
 constexpr int N_OUT = N_ACT * N_ACT;     // Q[runner action][blocker action]
@@ -63,6 +64,7 @@ inline void duelFeatures(const State& s, const Track& tr, int run, int blk, floa
   f[19] = rx(B.x - tr.x[c1], B.y - tr.y[c1]) / 10000;
   f[20] = ry(B.x - tr.x[c1], B.y - tr.y[c1]) / 10000;
 }
+// @bundle-skip-end
 
 // ---- Full-game features for imitating top bots ------------------------------
 //

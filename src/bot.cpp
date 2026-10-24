@@ -71,8 +71,8 @@ int main() {
   if (mode == "auto") mode = nnAvailable() ? "hybrid" : "search";
   if ((mode == "nn" || mode == "hybrid") && !nnAvailable()) mode = "search";
 
-  std::cerr << "mode " << mode << (nnAvailable() ? " (network embedded)" : " (no network)") << ", " << budget
-            << " ms per turn\n";
+  std::cerr << "mode " << mode << (nnAvailable() ? " (network embedded)" : " (no network)")
+            << (valueAvailable() ? " + value" : "") << ", " << budget << " ms per turn\n";
 
   Tracker tk;
   Track tr;

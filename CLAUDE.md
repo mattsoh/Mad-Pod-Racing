@@ -3,7 +3,66 @@
 C++17 bot for CodinGame's Mad Pod Racing, Legend league. Owner: mattsoh (Legend #261 with an older
 Python bot when this started). Goal: climb Legend. Read README.md for layout, tools and results.
 
-## Current state (v5, shipped as dist/mad_pod_bot.cpp; v4 kept as dist/mad_pod_bot_v4.cpp)
+## Current state (v9 in dist/mad_pod_bot.cpp, not yet on the ladder; v8 ... v5 kept as dist/mad_pod_bot_vN.cpp)
+- v9 = v8 + `blkPriorW=300`: a soft prior toward the imitation network's move for OUR BLOCKER on the plan's
+  first turn (cost 300 per unit of deviation: |rotation|/18 + 1 if the thrust kind differs). Top-15 second
+  pods mark the enemy blocker and double-team its runner 2-3x more than ours; the network imitates that,
+  while the hand-written blocker terms pull ours to a fixed post. vs v7: **70.3%** (422-178, seeds 21/37/53);
+  150: 65.8% (400), 1000: 55.8% (400), 3000: 47.8% (400) -- 300 is the peak. On top of v8: **63.5%** (254-146, seeds 21+37). Turn-time
+  distribution identical to v8 (p99.9 61 vs 53 ms, max 80 vs 76 at 40 ms); two local arena timeouts in
+  ~1,000 games of the prior builds were machine stalls.
+- Parallel testing: three extra cloud sessions ran the arena on the pushed branch (create_session with
+  source_revision = branch name, not a SHA; the arena does not create --replays dirs: mkdir -p first).
+
+- v8 = v7 + a learned VALUE network (src/value.h, nets/value32, `valueW=0.5`): predicts the race-lead change
+  over the next 30 turns from the 48 features of the whole 4-pod situation, trained on 2,501 real games
+  (tools/value_data.cpp, tools/train_value.py; held-out R2 0.40 vs linear 0.23). The search adds
+  valueW * 50000 * V at the horizon. vs v7 at 40 ms: **61.0%** (121-79 seed 21, 123-77 seed 37); valueW=1:
+  51.0% (too slow / too strong). It fixed the pin problem with no pin rules: pinned turns/game 152 -> 120,
+  speed toward the checkpoint while pinned 12 -> 55 (top-15 bots 47), pin p90 33 -> 21 turns (top 26).
+  `make bundle` (defaults WEIGHTS=nets/bcl_s_weights.h VALUE=nets/value32_weights.h) = 98.7k: the unused
+  duel-network code is left out of the bundle by @bundle-skip markers (tools/bundle.py).
+- Real-game team tactics (top-15 vs ours, ahead/level/behind): 2nd pod near the enemy blocker 19/38/20% vs
+  8/24/6%; both pods on the enemy runner 13/37/11% vs 8/23/6%; escort ~2% (rare for all); "both race when
+  ahead" is not a top-bot habit. Hand-coded versions of these failed before; the value network learns them.
+- v7 vs v6 confirmed over 800 games on 4 runs (seeds 21/37/37/53): 58.4%; + pathW=1 57.5% (600): no gain.
+
+- v7 = v6 + `runShieldW=500` (cost per SHIELD by our root runner). Why: on the ladder v6's pinned runner spent
+  29% of pinned turns shielding or reloading (top-15 bots 14%; context of each shield the same, so it is the
+  count). Arena vs v6 at 40 ms, seed 21: **63.0%** (126-74); pinned shield/reload 24.5% -> 9.4%, pinned
+  turns/game 224 -> 207. Other seeds/strengths were being run in parallel cloud sessions when v7 was cut.
+  Same round, vs v6 (200 games, seed 21): pinRobustW=0 28.5% (shield share unchanged: the network's own
+  rams drive the shields, not the heuristic worst case), pinRobustW=0.3 48%, pinNet=1 33.5% (top-bot shield
+  share, but loses), pathW=1 (runner progress along the path round enemy pods) 53.5%.
+
+- v6 = v5 + a faster engine (cast-based floor/trunc, interpolated trig table in applyMove; replays still exact)
+  + network `nets/bcl_s` (44+4 inputs: each pod's last move, masked after a rollout's first step; trained by
+  bc.cpp on what our bot sees: the predicted team's shields hidden, reload turns labelled thrust 0) on 1,669
+  top-20 replays + 628 of our battles. 6-turn prediction error on 71 held-out games: 678 vs bc160_t15's 737.
+  Arena vs v5 at 40 ms: **59.8%** (239-161 over 2 seeds). `make bundle WEIGHTS=nets/bcl_s_weights.h` (99.7k).
+- Calibration on the cloud container (4 cores): 40 ms there = CodinGame's 55 ms; run the arena with -j 2,
+  since it plays both bots of a game at once.
+- Lesson: the previous attempt (v5 + faster engine + a net fine-tuned on only our 628 battles) won 61.5% in
+  a local arena and TIED v5 on the ladder (42.53 vs 42.54). CodinGame test games cannot separate such
+  versions either: two near-identical bots disagreed on 12 of 33 identical games. Only the ladder decides.
+
+- LADDER RESULT for v6 (submission 41554993, 220 games): **41.98, rank 42** vs v5's 42.54 (#17). By opponent
+  rank: top 12 0-18 (v5 0-16), 13-25 40% (v5 35%), 26-60 61% (v5 71%), below 60 all won. Not a prediction
+  problem: bcl_s predicts ranks 26-60 better than bc160_t15 (798.9 vs 868.2 units at 6 turns, 63.1 vs 81.3 at 1).
+  Three arena "wins" over v5 (61.5%, 56.8%, 59.8%) have now given a tie and a loss on the ladder: the arena,
+  where the opponent is our own bot, does not predict the ladder for opponent-model changes.
+- What v6's real games show (tools/pin_stats.py on 220 v6 games vs 2,737 top-15 sides; `python3
+  tools/arena_boosts.py DIR` for arena replays): pinned runner coasts (thrust 0) 9% of pinned turns vs top 28%,
+  SHIELDs 8% vs 4.5%, BOOSTs 0.1% vs 3.3%, speed toward the checkpoint 8 vs 47, episode p90 40 vs 26. Boosts:
+  we use both in 93% of games, first at median turn 15 (top: 66%, turn 41, 24% never used); 56% of ours in
+  the first 20 turns and 55% by the blocker (top: 12% in the first 20, 74% after turn 60, 88% by the runner).
+- Knobs tried for that (off by default; 200 games vs v6 at 40 ms): `boostBlkW` (extra value of the root
+  blocker's unused boost) 4000 53% (runner share of boosts 50 -> 64%), 10000 48%; `boostEarly=2` (unused boost
+  worth boostW * (1 + 2 * race left)) 48%, and the start boost barely moves (37 -> 34% on turns 0-2). The search
+  finds the start boost worth more than 7,500. Neutral in the arena; untested on the ladder.
+- tools/bundle.py now also strips trailing comments (lines without string literals) when over the limit.
+
+## v5 (previously shipped; v4 kept as dist/mad_pod_bot_v4.cpp)
 - Evolutionary search over 6-turn plans (src/search.h) + imitation network (nets/bc160_t15, 44-160-160-7,
   trained on 2.5M moves of the top 15 Legend bots) used as the opponent model and as a seed ("hybrid").
 - v5 = v4 + robust scoring against two opponent predictions (`robustW=1`, see below) + `blockStick` 3000,

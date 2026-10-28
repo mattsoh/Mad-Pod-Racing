@@ -8,6 +8,12 @@
 //
 //   build/bc --data data/games.txt --teacher-rank 6 --epochs 30 --out nets/bc
 //   build/bc --data data/games.txt --eval nets/bc.bin
+//   build/bc --data data/games.txt --init nets/bc160_t15.bin --epochs 12 --lr 3e-4 --out nets/bcl   # fine-tune
+//
+// Features are what our bot can see of the predicted pod's team at runtime: integer angles, no shields,
+// last moves from observeLastMove (src/features.h). Without the shield state, a pod reloading after a
+// SHIELD is labelled with the thrust it really had (0). --last-drop masks the last-move inputs of that
+// share of the training samples, as rollouts do after their first step.
 #include <array>
 #include <chrono>
 #include <cstdio>
@@ -86,6 +92,8 @@ static void parseCmd(const std::string& c, double& x, double& y, int& thrust, in
   else thrust = std::atoi(tok.c_str());
 }
 
+static bool g_hideShields = true;
+
 // Re-simulates a game; appends samples for teacher pods. Returns false on any mismatch.
 static bool extract(const Game& g, int gi, int teacherRank, std::vector<Sample>& out, long& turnsOk) {
   State s;
@@ -95,8 +103,20 @@ static bool extract(const Game& g, int gi, int teacherRank, std::vector<Sample>&
   }
   bool teacher[2] = {g.rank[0] <= teacherRank, g.rank[1] <= teacherRank};
   std::vector<Sample> local;
+  State prevSeen{};
   for (size_t t = 0; t < g.cmds.size(); ++t) {
     State before = s;
+    State seen = s;  // as a bot sees it: integer angles and last moves
+    for (int k = 0; k < 4; ++k) {
+      seen.p[k].angle = normAngle(roundHalfUp(s.p[k].angle));
+      seen.p[k].rad = seen.p[k].angle * DEG;
+      if (t > 1) observeLastMove(seen.p[k], prevSeen.p[k]);
+      else clearLastMove(seen.p[k]);
+    }
+    prevSeen = seen;
+    State hidden[2] = {seen, seen};  // predicting team T: its shields are unknown to the other bot
+    for (int T = 0; T < 2; ++T)
+      for (int j = 2 * T; j < 2 * T + 2; ++j) hidden[T].p[j].shield = 0;
     for (int k = 0; k < 4; ++k) {
       double x, y;
       int thrust, kind;
@@ -107,10 +127,13 @@ static bool extract(const Game& g, int gi, int teacherRank, std::vector<Sample>&
       applyCommand(s, k, x, y, thrust, kind, t == 0);
       if (t == 0 || !teacher[k >> 1]) continue;
       Sample smp;
-      fullFeatures(before, g.tr, k, smp.f);
+      fullFeatures(g_hideShields ? hidden[k >> 1] : before, g.tr, k, smp.f);
+      if (!g_hideShields)
+        for (int i = F_LAST; i < N_FULL; ++i) smp.f[i] = i == N_FULL - 1 ? 1.f : 0.f;  // old behaviour: no last move
       smp.rot = (int8_t)bcRotBin(angleDiff(a0, s.p[k].angle));
       if (kind == K_BOOST && !boostOk) kind = K_THRUST, thrust = MAX_THRUST;
-      smp.kind = (int8_t)(shieldBefore > 0 && kind != K_SHIELD ? -1 : bcKind(thrust, kind));
+      bool reloading = shieldBefore > 0 && kind != K_SHIELD;
+      smp.kind = (int8_t)(reloading ? (g_hideShields ? bcKind(0, K_THRUST) : -1) : bcKind(thrust, kind));
       smp.game = gi;
       local.push_back(smp);
     }
@@ -129,7 +152,7 @@ static bool extract(const Game& g, int gi, int teacherRank, std::vector<Sample>&
   return true;
 }
 
-static const int kMirrorY[] = {2, 4, 6, 8, 15, 17, 19, 21, 24, 26, 28, 30, 33, 35, 37, 39};
+static const int kMirrorY[] = {2, 4, 6, 8, 15, 17, 19, 21, 24, 26, 28, 30, 33, 35, 37, 39, F_LAST};
 
 static void mirror(const Sample& a, Sample& b) {
   b = a;
@@ -196,7 +219,8 @@ int main(int argc, char** argv) {
   setvbuf(stdout, nullptr, _IOLBF, 0);
   std::string data = "data/games.txt", out = "nets/bc", evalFile, evalData;
   int teacherRank = 6, epochs = 30, hidden = 128, batch = 256, threads = 0;
-  float lr = 1e-3f, valShare = 0.1f;
+  float lr = 1e-3f, valShare = 0.1f, lastDrop = 0.5f;
+  std::string init;
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto v = [&]() { return std::string(argv[++i]); };
@@ -210,8 +234,12 @@ int main(int argc, char** argv) {
     else if (a == "--batch") batch = std::stoi(v());
     else if (a == "--lr") lr = std::stof(v());
     else if (a == "--threads") threads = std::stoi(v());
+    else if (a == "--init") init = v();
+    else if (a == "--last-drop") lastDrop = std::stof(v());
+    else if (a == "--hide-shields") g_hideShields = std::stoi(v()) != 0;
     else {
-      printf("usage: bc --data FILE [--teacher-rank N] [--epochs N] [--hidden N] [--out PREFIX] [--eval FILE] [--eval-data FILE]\n");
+      printf("usage: bc --data FILE [--teacher-rank N] [--epochs N] [--hidden N] [--out PREFIX] [--eval FILE] [--eval-data FILE]"
+             " [--init FILE] [--last-drop P] [--hide-shields 0|1]\n");
       return 2;
     }
   }
@@ -271,6 +299,22 @@ int main(int argc, char** argv) {
   int nth = threads > 0 ? threads : (int)std::max(1u, std::thread::hardware_concurrency());
   Trainer T;
   T.net.init({N_FULL, hidden, hidden, BC_OUT}, 7);
+  if (!init.empty()) {  // fine-tune; inputs the old network lacked start with zero weights
+    MLP old;
+    if (!loadNet(old, init)) return printf("cannot read %s\n", init.c_str()), 1;
+    if (old.L.size() != T.net.L.size() || old.inputs() > N_FULL) return printf("%s: incompatible network\n", init.c_str()), 1;
+    for (size_t l = 0; l < old.L.size(); ++l) {
+      Dense& d = T.net.L[l];
+      const Dense& o = old.L[l];
+      if (o.out != d.out || (l > 0 && o.in != d.in)) return printf("%s: layer %zu differs\n", init.c_str(), l), 1;
+      std::fill(d.W.begin(), d.W.end(), 0.f);
+      for (int r = 0; r < d.out; ++r)
+        for (int c = 0; c < o.in; ++c) d.W[(size_t)r * d.in + c] = o.W[(size_t)r * o.in + c];
+      d.b = o.b;
+    }
+    printf("fine-tuning %s (%d inputs)\n", init.c_str(), old.inputs());
+    report("val", evaluateSet(T.net, val));
+  }
   T.setup(nth);
   Rng rng(99);
   std::vector<float> X((size_t)batch * N_FULL);
@@ -285,7 +329,13 @@ int main(int argc, char** argv) {
       parallelFor(nth, batch, [&](int t, int lo, int hi) {
         int n = hi - lo;
         std::vector<float> xb((size_t)n * N_FULL), dOut((size_t)n * BC_OUT);
-        for (int i = 0; i < n; ++i) std::memcpy(&xb[(size_t)i * N_FULL], train[idx[b0 + lo + i]].f, sizeof(float) * N_FULL);
+        for (int i = 0; i < n; ++i) {
+          float* x = &xb[(size_t)i * N_FULL];
+          std::memcpy(x, train[idx[b0 + lo + i]].f, sizeof(float) * N_FULL);
+          uint32_t h = (uint32_t)(idx[b0 + lo + i] * 2654435761u) ^ (uint32_t)(ep * 40503u);
+          if ((h >> 8) % 1000 < lastDrop * 1000)  // last move masked, as after a rollout's first step
+            x[F_LAST] = x[F_LAST + 1] = x[F_LAST + 2] = 0.f, x[F_LAST + 3] = 1.f;
+        }
         const float* q = T.workers[t].forward(T.net, xb.data(), n);
         for (int i = 0; i < n; ++i)
           heads(q + (size_t)i * BC_OUT, train[idx[b0 + lo + i]], &dOut[(size_t)i * BC_OUT], 1.f / batch, accs[t]);

@@ -57,6 +57,29 @@ struct EvalParams {
   double rescueSpeedW = 3.0;  // per unit of the blocker's speed toward it
   double rescueLead = 10;     // no rescue while our clock leads theirs by more than this (in a mutual pin, whoever breaks off first loses the race; 0 = off)
   double rescueOf[2] = {0, 0};  // set each turn from the root: how urgently each team's blocker must go (0..1)
+  // Extra value of the BOOST still unused by the pod that is our blocker at the root. Top-15 bots fire 88% of
+  // their boosts with the runner, 74% after turn 60 (to break pins and sprint); v5/v6 fired 55% with the
+  // blocker and over half in the first 20 turns, then had none left for pins (0.1% of pinned turns vs 3.3%).
+  double boostBlkW = 0;
+  double boostEarly = 0;
+  // Our runner's progress measured along the shortest path round the enemy pods (radius pathR) instead of in a
+  // straight line: weight of the detour they force (0 = off). Whichever of our pods clears the line scores,
+  // so the blocker knocks a pinning pod aside only when that frees the runner within the horizon.
+  double pathW = 0, pathR = 800;
+  // Cost per SHIELD by the pod that is our runner at the root. On the ladder v6's pinned runner spent 29% of
+  // its pinned turns shielding or reloading (top-15 bots 14%), each shield costing 3 turns without thrust.
+  // Soft prior toward the imitation network's move for our blocker (first turn of the plan): cost per unit of
+  // deviation (|rotation| / 18 + 1 if the thrust kind differs). Top bots' second pods mark the enemy blocker
+  // and double-team its runner 2-3x more than ours; the network imitates that, the hand-written blocker terms
+  // pull ours back to a fixed post. 0 = off.
+  double blkPriorW = 300;     // v9. 0 = v8. vs v7: 70.8% (283-117, seeds 21+37); on top of v8: 63.5% (254-146);
+                               // 1000 55.8%, 3000 47.8% vs v7: the network's move is a nudge, not an order
+  double valueW = 0.5;         // weight of the learned value (src/value.h) at the horizon, in checkpoints * 50000.
+                               // v8. 0 = v7. vs v7 at 40 ms: 61.0% (244-156, seeds 21+37); pinned turns/game 152 -> 120,
+                               // speed toward the checkpoint while pinned 12 -> 55 (top bots 47), pin p90 33 -> 21 turns
+  double (*valueFn)(const State&, const Track&, int) = nullptr;  // set by the bot when a value network is embedded
+  double runShieldW = 500;     // v7. 0 = v6. vs v6 at 40 ms: 63.0% (126-74, seed 21); pinned shield/reload 24.5% -> 9.4%      // our unused boosts are worth boostW * (1 + boostEarly * share of the race still to run)
+  int rootBlk[2] = {1, 3};    // set each turn from the root: each team's blocker
   double snapP = 0.125;       // chance a mutation snaps to the top bots' moves (-18/0/+18 deg, thrust 0/200)
   double boostW = 2500;       // value of each BOOST still unused at the horizon (top bots save theirs; 0 lost 39% vs v1, 2000-4000 won ~80%)
   double blockOff = 1000;     // blocker: waits this far in front of the checkpoint, toward the enemy runner (top bots: 700-1100)
@@ -100,6 +123,13 @@ struct EvalParams {
         else if (k == "boostW") boostW = v;
         else if (k == "blockOff") blockOff = v;
         else if (k == "blockLead") blockLead = v;
+        else if (k == "boostBlkW") boostBlkW = v;
+        else if (k == "boostEarly") boostEarly = v;
+        else if (k == "pathW") pathW = v;
+        else if (k == "pathR") pathR = v;
+        else if (k == "runShieldW") runShieldW = v;
+        else if (k == "valueW") valueW = v;
+        else if (k == "blkPriorW") blkPriorW = v;
         else if (k == "blockStick") blockStick = v;
         else if (k == "shieldUseW") shieldUseW = v;
         else if (k == "robustW") robustW = v;
@@ -114,6 +144,18 @@ struct EvalParams {
 };
 
 inline double dist(double ax, double ay, double bx, double by) { return std::hypot(ax - bx, ay - by); }
+
+// Extra length of the shortest path from (rx, ry) to (cx, cy) that goes round a disc of radius r at (bx, by),
+// over the straight line (0 when the line is clear or the disc covers the target).
+inline double detour(double rx, double ry, double cx, double cy, double bx, double by, double r) {
+  double dR = dist(rx, ry, bx, by), dC = dist(cx, cy, bx, by);
+  if (dC <= r) return 0;
+  dR = std::max(dR, r + 1e-3);
+  double cosT = ((rx - bx) * (cx - bx) + (ry - by) * (cy - by)) / (dR * dC);
+  double arc = std::acos(std::max(-1.0, std::min(1.0, cosT))) - std::acos(r / dR) - std::acos(r / dC);
+  if (arc <= 0) return 0;
+  return std::sqrt(dR * dR - r * r) + std::sqrt(dC * dC - r * r) + r * arc - dist(rx, ry, cx, cy);
+}
 
 inline void applyGene(State& s, int i, const Gene& g) { applyMove(s, i, g.rot, g.thrust, g.kind); }
 
@@ -180,14 +222,22 @@ inline double evaluate(const State& s, const Track& tr, int team, int depth, con
   score -= blocking * P.blockAngW * std::fabs(angleDiff(B.angle, toRun));
 
   score -= P.shieldW * (R.shield + 0.3 * B.shield);
+  if (P.valueW != 0 && P.valueFn) score += P.valueW * 50000 * P.valueFn(s, tr, team);
+  if (P.pathW != 0) {
+    double cx = tr.x[R.next], cy = tr.y[R.next], worst = 0;
+    for (int e : {c, d}) worst = std::max(worst, detour(R.x, R.y, cx, cy, s.p[e].x, s.p[e].y, P.pathR));
+    score -= P.pathW * worst;
+  }
   if (P.boostW != 0) {
     if (g_sharedBoost) {
       score += P.boostW * ((s.teamBoostUsed[team] ? 0 : 1) - (s.teamBoostUsed[1 - team] ? 0 : 1));
     } else {
-      score += P.boostW * ((s.p[a].boostUsed ? 0 : 1) + (s.p[b].boostUsed ? 0 : 1));
+      double left = 1.0 - std::max(s.p[a].passed, s.p[b].passed) / (double)tr.total();
+      score += P.boostW * (1 + P.boostEarly * left) * ((s.p[a].boostUsed ? 0 : 1) + (s.p[b].boostUsed ? 0 : 1));
       score -= P.boostW * ((s.p[c].boostUsed ? 0 : 1) + (s.p[d].boostUsed ? 0 : 1));
     }
   }
+  if (P.boostBlkW != 0 && !s.p[P.rootBlk[team]].boostUsed) score += P.boostBlkW;
   score -= P.timeoutW * std::max(0, 25 - s.timeout[team]);
   score += P.timeoutW * std::max(0, 25 - s.timeout[1 - team]);
   return score;
@@ -289,13 +339,22 @@ struct Search {
   // and to seed our own search.
   std::function<void(const State&, int, const Plan&, Plan&)> model;
 
+  Plan prior{};               // the network's plan for our team this turn (blkPriorW)
+  bool havePrior = false;
   double score(const State& root, const Plan& t0, const Plan& t1, int team) {
     ++evals;
     State s = root;
     const Plan& own = team == 0 ? t0 : t1;
     double cost = 0;
+    if (havePrior && team == 0) {  // our blocker's first move vs the network's
+      int j = P.rootBlk[0] & 1;
+      const Gene &g = own.g[0][j], &q = prior.g[0][j];
+      auto cls = [](const Gene& x) { return x.kind != K_THRUST ? 2 + x.kind : x.thrust >= MAX_THRUST / 2; };
+      cost += P.blkPriorW * (std::fabs(g.rot - q.rot) / MAX_ROT + (cls(g) != cls(q)));
+    }
     for (int d = 0; d < DEPTH; ++d) {
       cost += P.shieldUseW * ((own.g[d][0].kind == K_SHIELD) + (own.g[d][1].kind == K_SHIELD));
+      cost += P.runShieldW * (own.g[d][(P.rootBlk[team] & 1) ^ 1].kind == K_SHIELD);
       applyGene(s, 0, t0.g[d][0]);
       applyGene(s, 1, t0.g[d][1]);
       applyGene(s, 2, t1.g[d][0]);
@@ -404,6 +463,7 @@ struct Search {
     for (int t = 0; t < 2; ++t) {
       int run, blk;
       roles(root, tr, t, run, blk);
+      P.rootBlk[t] = blk;
       const Pod& B = root.p[blk];
       double need = dist(B.x, B.y, tr.x[B.next], tr.y[B.next]) / P.rescueSpeed + P.rescueTurn;
       P.rescueOf[t] = std::max(0.0, std::min(1.0, (P.rescueSlack - (root.timeout[t] - need)) / P.rescueSlack));
@@ -423,6 +483,8 @@ struct Search {
     else
       theirs = oppSeeds[2];  // trust the model's prediction as is
     if (model) model(root, 0, theirs, mySeeds[2]);
+    havePrior = model && P.blkPriorW > 0;
+    if (havePrior) prior = mySeeds[2];
     int myN = nSeeds;
     int run;
     bool pinned = runnerPinned(root, run);

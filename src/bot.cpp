@@ -21,6 +21,7 @@
 #include "engine.h"
 #include "nnbot.h"
 #include "search.h"
+#include "value.h"
 
 using namespace mpr;
 
@@ -70,8 +71,8 @@ int main() {
   if (mode == "auto") mode = nnAvailable() ? "hybrid" : "search";
   if ((mode == "nn" || mode == "hybrid") && !nnAvailable()) mode = "search";
 
-  std::cerr << "mode " << mode << (nnAvailable() ? " (network embedded)" : " (no network)") << ", " << budget
-            << " ms per turn\n";
+  std::cerr << "mode " << mode << (nnAvailable() ? " (network embedded)" : " (no network)")
+            << (valueAvailable() ? " + value" : "") << ", " << budget << " ms per turn\n";
 
   Tracker tk;
   Track tr;
@@ -92,6 +93,7 @@ int main() {
 #endif
   if (const char* e = std::getenv("MPR_PARAMS")) S.P.parse(e);
   if (std::getenv("MPR_SHARED_BOOST")) g_sharedBoost = true;  // local experiments only
+  if (valueAvailable()) S.P.valueFn = valueOf;
   NNPlayer nn(tr);
   if (mode == "hybrid")
     S.model = [&nn](const State& s, int team, const Plan& other, Plan& p) { nn.rollout(s, team, other, p); };
@@ -137,6 +139,8 @@ int main() {
                              : normAngle(in[k][4]);
       p.shield = k < 2 ? tk.myShield[k] : 0;
       p.boostUsed = tk.podBoost[k];
+      if (tk.turn > 1) observeLastMove(p, tk.prev.p[k]);
+      else clearLastMove(p);
     }
     st.timeout[0] = tk.timeout[0];
     st.timeout[1] = tk.timeout[1];

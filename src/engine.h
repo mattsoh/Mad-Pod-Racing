@@ -44,6 +44,10 @@ struct Pod {
   int passed;      // checkpoints passed so far
   int shield;      // >0: no thrust this turn; ==4: shield active (mass x10)
   bool boostUsed;  // this pod has fired BOOST
+  // Last turn's move as seen from outside, for the network (src/features.h, observeLastMoves).
+  float lastRot, lastThrust;  // thrust 0 when unknown
+  bool lastTouch;             // the speed change does not fit a move of its own: the pod touched another
+  bool lastMasked;            // set by every simulated move: rollouts do not feed the network its own guesses
 };
 
 struct State {
@@ -66,7 +70,13 @@ inline double angleDiff(double a, double b) {
   while (d < -180.0) d += 360.0;
   return d;
 }
-inline double roundHalfUp(double v) { return std::floor(v + 0.5); }
+// floor and trunc through integer casts: exact for game coordinates, and no libm call (CodinGame compiles
+// without SSE4.1, where std::floor and std::trunc cost a function call each; 17% of the search's time)
+inline double truncFast(double v) { return (double)(long long)v; }
+inline double roundHalfUp(double v) {
+  double t = truncFast(v + 0.5);
+  return t > v + 0.5 ? t - 1 : t;
+}
 
 inline bool boostAvailable(const State& s, int i) {
   return g_sharedBoost ? !s.teamBoostUsed[i >> 1] : !s.p[i].boostUsed;
@@ -97,6 +107,17 @@ inline void addThrust(Pod& p, int t) {
   p.vy += std::sin(p.rad) * t;
 }
 
+// cos and sin every 0.1 degree for the search, interpolated: within 4e-7 of the exact values, far below the
+// referee's truncation of the speeds. Replaces a sincos call per pod and turn (about 30% of the engine's time).
+// Rounding the search's rotations to whole degrees instead (an exact table) lost 47.5% to v5: keep fractions.
+struct TrigTable {
+  double c[3601], s[3601];
+  TrigTable() {
+    for (int k = 0; k <= 3600; ++k) c[k] = std::cos(k * 0.1 * DEG), s[k] = std::sin(k * 0.1 * DEG);
+  }
+};
+inline const TrigTable g_trig;
+
 // Search-level move: rotation relative to the current heading.
 inline void applyMove(State& s, int i, double rot, int thrust, int kind) {
   int t = resolveThrust(s, i, thrust, kind);
@@ -104,7 +125,13 @@ inline void applyMove(State& s, int i, double rot, int thrust, int kind) {
   rot = std::max(-MAX_ROT, std::min(MAX_ROT, rot));
   p.angle = normAngle(p.angle + rot);
   p.rad = p.angle * DEG;
-  addThrust(p, t);
+  p.lastMasked = true;
+  if (t == 0) return;
+  double x = p.angle * 10;
+  int k = (int)x;
+  double f = x - k;
+  p.vx += (g_trig.c[k] + (g_trig.c[k + 1] - g_trig.c[k]) * f) * t;
+  p.vy += (g_trig.s[k] + (g_trig.s[k + 1] - g_trig.s[k]) * f) * t;
 }
 
 // Referee-level command: the pod turns toward (tx, ty).
@@ -228,8 +255,8 @@ inline void step(State& s, const Track& tr) {
   }
   for (int k = 0; k < 4; ++k) {
     Pod& q = p[k];
-    q.vx = std::trunc(q.vx * FRICTION);
-    q.vy = std::trunc(q.vy * FRICTION);
+    q.vx = truncFast(q.vx * FRICTION);
+    q.vy = truncFast(q.vy * FRICTION);
     q.x = roundHalfUp(q.x);
     q.y = roundHalfUp(q.y);
     if (q.shield > 0) q.shield--;

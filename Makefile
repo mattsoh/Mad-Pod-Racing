@@ -2,7 +2,7 @@ CXX      ?= g++
 CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Wno-unused-result
 BUILD    := build
 
-all: $(BUILD)/bot $(BUILD)/arena $(BUILD)/engine_cli $(BUILD)/train $(BUILD)/bc $(BUILD)/predict_eval $(BUILD)/replay_check
+all: $(BUILD)/bot $(BUILD)/arena $(BUILD)/engine_cli $(BUILD)/train $(BUILD)/bc $(BUILD)/predict_eval $(BUILD)/replay_check $(BUILD)/cglog_states
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -28,12 +28,16 @@ $(BUILD)/predict_eval: src/*.h tools/nn_train.h tools/predict_eval.cpp | $(BUILD
 $(BUILD)/replay_check: src/engine.h tools/replay_check.cpp | $(BUILD)
 	$(CXX) $(CXXFLAGS) -o $@ tools/replay_check.cpp
 
+$(BUILD)/cglog_states: src/engine.h tools/cglog_states.cpp | $(BUILD)
+	$(CXX) $(CXXFLAGS) -o $@ tools/cglog_states.cpp
+
 # One self-contained file to paste into the CodinGame IDE (language: C++), with
 # the imitation network embedded (hybrid mode: it predicts the opponent and
 # seeds the search).
-WEIGHTS ?= nets/bc160_t15_weights.h
+WEIGHTS ?= nets/bcl_s_weights.h
+VALUE ?= nets/value32_weights.h
 bundle: | $(BUILD)
-	python3 tools/bundle.py src/bot.cpp dist/mad_pod_bot.cpp --weights $(WEIGHTS)
+	python3 tools/bundle.py src/bot.cpp dist/mad_pod_bot.cpp --weights $(WEIGHTS) --value $(VALUE)
 
 # The same bot without a network (pure search).
 bundle-search: | $(BUILD)

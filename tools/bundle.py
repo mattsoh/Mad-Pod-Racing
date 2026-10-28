@@ -15,18 +15,33 @@ LIMIT = 100_000
 INCLUDE = re.compile(r'^\s*#\s*include\s+"([^"]+)"\s*$')
 
 
-def inline(path, seen, weights):
+def inline(path, seen, weights, value=None):
     path = os.path.normpath(path)
     if os.path.basename(path) == "weights.h" and weights:
         path = weights
+    if os.path.basename(path) == "value_weights.h" and value:
+        path = value
     if path in seen:
         return []
     seen.add(path)
     out = []
+    skipping = False
     for line in open(path, encoding="utf-8"):
+        s = line.strip()
+        # Code the submitted bot never runs (e.g. the old duel network) is marked and left out of the bundle.
+        if s.startswith("// @bundle-skip-begin"):
+            skipping = True
+            continue
+        if s.startswith("// @bundle-skip-end"):
+            skipping = False
+            continue
+        if skipping:
+            continue
+        if s.startswith("// @bundle-only "):
+            line = line.replace("// @bundle-only ", "", 1)
         m = INCLUDE.match(line)
         if m:
-            out += inline(os.path.join(os.path.dirname(path), m.group(1)), seen, weights)
+            out += inline(os.path.join(os.path.dirname(path), m.group(1)), seen, weights, value)
         elif line.strip() == "#pragma once":
             continue
         else:
@@ -40,6 +55,8 @@ def strip_comments(lines):
         s = line.strip()
         if not s or (s.startswith("//") and '"' not in s):
             continue
+        if "//" in line and '"' not in line and "'" not in line:  # trailing comment, no literal on the line
+            line = line[:line.index("//")].rstrip() + "\n"
         out.append(line)
     return out
 
@@ -49,8 +66,9 @@ def main():
     ap.add_argument("src")
     ap.add_argument("dst")
     ap.add_argument("--weights", help="weights header to embed instead of src/weights.h")
+    ap.add_argument("--value", help="value-network header to embed instead of src/value_weights.h")
     a = ap.parse_args()
-    lines = inline(a.src, set(), a.weights and os.path.normpath(a.weights))
+    lines = inline(a.src, set(), a.weights and os.path.normpath(a.weights), a.value and os.path.normpath(a.value))
     text = "".join(lines)
     if len(text) > LIMIT:
         text = "".join(strip_comments(lines))
